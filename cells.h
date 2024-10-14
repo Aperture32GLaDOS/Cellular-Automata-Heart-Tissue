@@ -21,7 +21,7 @@ struct Cells {
   Cell** cells;
 };
 
-Cells advanceCells(Cells currentState);
+void advanceCells(Cells currentState);
 
 // Turn a 2D array of cells into a 1D array of bytes (i.e. for dumping to a file)
 unsigned char* serializeCells(Cells currentState);

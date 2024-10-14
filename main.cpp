@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <tuple>
+#include <vector>
 #include "cells.h"
 
 uint getSizeOfData(Cells data) {
@@ -90,6 +92,28 @@ Cells readCellsFromFile(char* fileName) {
   unsigned char* data = new unsigned char[length];
   inputStream.read((char*) data, length);
   return readCells(data);
+}
+
+void advanceCells(Cells currentState) {
+  std::vector<std::tuple<int, int>> cellsToChange;
+  std::vector<uint> newStates;
+  for (int i = 0; i < currentState.height; i++) {
+    for (int j = 0; j < currentState.width; j++) {
+      // TODO: implement rules for changing states
+      // If the cell must be changed,
+      if (false) {
+        // Push the location of the cell and its new state
+        cellsToChange.push_back(std::make_tuple(i, j));
+        newStates.push_back(0);
+      }
+    }
+  }
+
+  // Set all changed states
+  for (int i = 0; i < cellsToChange.size(); i++) {
+    std::tuple<int, int> cellLocation = cellsToChange[i];
+    currentState.cells[std::get<0>(cellLocation)][std::get<1>(cellLocation)].state = newStates[i];
+  }
 }
 
 int main (int argc, char *argv[]) {
