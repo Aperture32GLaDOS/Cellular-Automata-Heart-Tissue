@@ -1,9 +1,15 @@
+#include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
 #include "cells.h"
 
+uint getSizeOfData(Cells data) {
+  return sizeof(uint) * 2 + sizeof(Cell) * data.height * data.width;
+}
+
 unsigned char* serializeCells(Cells currentState) {
-  unsigned char* serializedData = new uint8_t[sizeof(uint) * 2 + sizeof(Cell) * currentState.height * currentState.width];
+  unsigned char* serializedData = new uint8_t[getSizeOfData(currentState)];
   // Global index to keep track of where in the serializedData array we are (to avoid annoying index calculations)
   uint index = 0;
   // Serialize the width and height
@@ -67,6 +73,25 @@ Cells readCells(uint8_t* serializedData) {
   return cells;
 }
 
+void saveCellsToFile(Cells cells, char* fileName) {
+  unsigned char* data = serializeCells(cells);
+  std::ofstream outputStream;
+  outputStream.open(fileName);
+  outputStream.write((char*) data, getSizeOfData(cells));
+  outputStream.close();
+}
+
+Cells readCellsFromFile(char* fileName) {
+  std::ifstream inputStream;
+  inputStream.open(fileName);
+  inputStream.seekg(0, std::ios::end);
+  size_t length = inputStream.tellg();
+  inputStream.seekg(0, std::ios::beg);
+  unsigned char* data = new unsigned char[length];
+  inputStream.read((char*) data, length);
+  return readCells(data);
+}
+
 int main (int argc, char *argv[]) {
   // Declare the 2D plane of cells
   Cells cells;
@@ -82,8 +107,5 @@ int main (int argc, char *argv[]) {
       cells.cells[i][j] = newCell;
     }
   }
-  unsigned char* serializedData = serializeCells(cells);
-  // cells and sameCells are the same (though, sameCells takes up different memory)
-  Cells sameCells = readCells(serializedData);
   return 0;
 }
