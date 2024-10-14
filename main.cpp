@@ -1,33 +1,89 @@
+#include <cstdint>
 #include <iostream>
 #include "cells.h"
 
-// TODO: this is quite slow currently, and deep-copies a 1000*1000 array every iteration
-Cell** advanceCells(Cell** currentState) {
-  Cell** newState = new Cell*[SIZE];
-  for (int i = 0; i < SIZE; i++) {
-    newState[i] = new Cell[SIZE];
-    for (int j = 0; j < SIZE; j++) {
-      // TODO: apply advancing rules for cells
-
+unsigned char* serializeCells(Cells currentState) {
+  unsigned char* serializedData = new uint8_t[sizeof(uint) * 2 + sizeof(Cell) * currentState.height * currentState.width];
+  // Global index to keep track of where in the serializedData array we are (to avoid annoying index calculations)
+  uint index = 0;
+  // Serialize the width and height
+  for (int i = 0; i < sizeof(uint); i++) {
+    serializedData[index] = (unsigned char) (currentState.width >> (i * 8));
+    index++;
+  }
+  for (int i = 0; i < sizeof(uint); i++) {
+    serializedData[index] = (unsigned char) (currentState.height >> (i * 8));
+    index++;
+  }
+  // Serialize all the actual data
+  for (int i = 0; i < currentState.height; i++) {
+    for (int j = 0; j < currentState.width; j++) {
+      Cell currentCell = currentState.cells[i][j];
+      // Serialize the cell type, followed by the state
+      for (int k = 0; k < sizeof(CellType); k++) {
+        serializedData[index] = (unsigned char) (currentCell.type >> (k * 8));
+        index++;
+      }
+      for (int k = 0; k < sizeof(uint); k++) {
+        serializedData[index] = (unsigned char) (currentCell.state >> (k * 8));
+        index++;
+      }
     }
   }
-  // Free memory used for currentState
-  // TODO: remember to remove this when the array is no longer deep-copied
-  for (int i = 0; i < SIZE; i++) {
-    delete [] currentState[i];
+  return serializedData;
+}
+
+Cells readCells(uint8_t* serializedData) {
+  Cells cells;
+  uint index = 0;
+  cells.width = 0;
+  for (int i = 0; i < sizeof(uint); i++) {
+    cells.width = cells.width | (serializedData[index] << i * 8);
+    index++;
   }
-  delete currentState;
-  return newState;
+  cells.height = 0;
+  for (int i = 0; i < sizeof(uint); i++) {
+    cells.height = cells.height | (serializedData[index] << i * 8);
+    index++;
+  }
+  cells.cells = new Cell*[cells.height];
+  for (int i = 0; i < cells.height; i++) {
+    cells.cells[i] = new Cell[cells.width];
+    for (int j = 0; j < cells.width; j++) {
+      Cell currentCell;
+      currentCell.type = (CellType) 0;
+      for (int k = 0; k < sizeof(CellType); k++) {
+        currentCell.type = (CellType) (currentCell.type | (serializedData[index] << k * 8));
+        index++;
+      }
+      currentCell.state = 0;
+      for (int k = 0; k < sizeof(CellType); k++) {
+        currentCell.state = currentCell.state | (serializedData[index] << k * 8);
+        index++;
+      }
+      cells.cells[i][j] = currentCell;
+    }
+  }
+  return cells;
 }
 
 int main (int argc, char *argv[]) {
   // Declare the 2D plane of cells
-  // TODO: make a way of serializing this data, so certain situations can be saved for
-  // further research
-  Cell** cells = new Cell*[SIZE];
-  for (int i = 0; i < SIZE; i++) {
-    cells[i] = new Cell[SIZE];
+  Cells cells;
+  cells.width = SIZE;
+  cells.height = SIZE;
+  cells.cells = new Cell*[cells.height];
+  for (int i = 0; i < cells.height; i++) {
+    cells.cells[i] = new Cell[cells.width];
+    for (int j = 0; j < cells.width; j++) {
+      Cell newCell;
+      newCell.type = CellType::Tissue;
+      newCell.state = 0;
+      cells.cells[i][j] = newCell;
+    }
   }
-  std::cout << "Hello, World!" << std::endl;
+  unsigned char* serializedData = serializeCells(cells);
+  // cells and sameCells are the same (though, sameCells takes up different memory)
+  Cells sameCells = readCells(serializedData);
   return 0;
 }

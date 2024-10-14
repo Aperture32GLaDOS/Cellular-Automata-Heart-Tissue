@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <sys/types.h>
 #define SIZE 1000
 
@@ -14,4 +15,16 @@ struct Cell {
   uint state;
 };
 
-Cell** advanceCells(Cell** currentState);
+struct Cells {
+  uint width;
+  uint height;
+  Cell** cells;
+};
+
+Cells advanceCells(Cells currentState);
+
+// Turn a 2D array of cells into a 1D array of bytes (i.e. for dumping to a file)
+unsigned char* serializeCells(Cells currentState);
+
+// Inverse of serializeCells
+Cells readCells(unsigned char* serializedCells);
