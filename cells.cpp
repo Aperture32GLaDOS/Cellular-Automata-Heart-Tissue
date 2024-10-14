@@ -98,9 +98,34 @@ void advanceCells(Cells currentState) {
   std::vector<std::tuple<int, int>> cellsToChange;
   std::vector<uint> newStates;
   for (int i = 0; i < currentState.height; i++) {
+    if (i == 0) {
+      // TODO: remove this!
+      continue;
+    }
+    if (i == currentState.height - 1) {
+      break;
+    }
     for (int j = 0; j < currentState.width; j++) {
-      // TODO: implement rules for changing states
-      // If the cell must be changed,
+      if (j == 0) {
+        continue;
+      }
+      if (j == currentState.width - 1) {
+        break;
+      }
+      // Conway's game of life
+      int neighboringCount = currentState.cells[i + 1][j].state + currentState.cells[i - 1][j].state + currentState.cells[i + 1][j + 1].state + currentState.cells[i - 1][j - 1].state + currentState.cells[i][j + 1].state + currentState.cells[i][j - 1].state;
+      if (currentState.cells[i][j].state == 0) {
+        if (neighboringCount == 3) {
+          cellsToChange.push_back(std::make_tuple(i, j));
+          newStates.push_back(1);
+        }
+      }
+      else {
+        if (neighboringCount < 2 || neighboringCount > 3) {
+          cellsToChange.push_back(std::make_tuple(i, j));
+          newStates.push_back(0);
+        }
+      }
       if (false) {
         // Push the location of the cell and its new state
         cellsToChange.push_back(std::make_tuple(i, j));
