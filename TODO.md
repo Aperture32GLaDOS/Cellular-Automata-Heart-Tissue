@@ -1,3 +1,2 @@
-- Make GUI for interacting with cellular automata
 - Implement heart tissue rules
 - Create tools for analyzing cellular automata behaviour (i.e. average state over area, how state changes over time, etc.)
