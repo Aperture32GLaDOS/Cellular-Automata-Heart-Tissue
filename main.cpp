@@ -117,11 +117,22 @@ int main (int argc, char *argv[]) {
         }
       }
       else if (currentEvent.type == SDL_MOUSEWHEEL) {
+        // Zooms into where the user's cursor is
+        SDL_GetMouseState(&mousePosX, &mousePosY);
+        // Calculate the selected X and Y pixel
+        int selectedX = (mousePosX / zoomFactor) - xOffset;
+        int selectedY = (mousePosY / zoomFactor) - yOffset;
         zoomFactor = zoomFactor + currentEvent.wheel.y;
         if (zoomFactor < 1) {
           zoomFactor = 1;
         }
+        else {
+          // Rearrange the equation to calculate the new x and y offsets
+          xOffset = (mousePosX / zoomFactor) - selectedX;
+          yOffset = (mousePosY / zoomFactor) - selectedY;
+        }
       }
+      // When the user presses the mouse button, change the state of the cellular automata
       else if (currentEvent.type == SDL_MOUSEBUTTONDOWN) {
         SDL_GetMouseState(&mousePosX, &mousePosY);
         Cell* selectedCell = &cells.cells[(int) ((mousePosY / zoomFactor) - yOffset)][(int) ((mousePosX / zoomFactor) - xOffset)];
