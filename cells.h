@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <sys/types.h>
+#include <SDL2/SDL_render.h>
 #define SIZE 1000
 
 enum CellType{
@@ -28,3 +29,5 @@ unsigned char* serializeCells(Cells currentState);
 
 // Inverse of serializeCells
 Cells readCells(unsigned char* serializedCells);
+
+void renderCells(Cells cells, SDL_Renderer* renderer);

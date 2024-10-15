@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <cstdlib>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -139,5 +140,20 @@ void advanceCells(Cells currentState) {
     std::tuple<int, int> cellLocation = cellsToChange[i];
     currentState.cells[std::get<0>(cellLocation)][std::get<1>(cellLocation)].state = newStates[i];
   }
+}
+
+// Renders the cells at a (currently) 1-1 ratio of cells to pixels
+void renderCells(Cells cells, SDL_Renderer* render) {
+  SDL_SetRenderDrawColor(render, 0, 0, 0, 0);
+  SDL_RenderClear(render);
+  SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
+  for (int i = 0; i < cells.height; i++) {
+    for (int j = 0; j < cells.width; j++) {
+      if (cells.cells[i][j].state > 0) {
+        SDL_RenderDrawPoint(render, i, j);
+      }
+    }
+  }
+  SDL_RenderPresent(render);
 }
 
