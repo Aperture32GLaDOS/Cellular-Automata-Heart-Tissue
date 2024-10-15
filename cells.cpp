@@ -115,7 +115,7 @@ void advanceCells(Cells currentState) {
         break;
       }
       // Conway's game of life
-      int neighboringCount = currentState.cells[i + 1][j].state + currentState.cells[i - 1][j].state + currentState.cells[i + 1][j + 1].state + currentState.cells[i - 1][j - 1].state + currentState.cells[i][j + 1].state + currentState.cells[i][j - 1].state;
+      int neighboringCount = currentState.cells[i + 1][j].state + currentState.cells[i - 1][j].state + currentState.cells[i + 1][j + 1].state + currentState.cells[i - 1][j - 1].state + currentState.cells[i][j + 1].state + currentState.cells[i][j - 1].state + currentState.cells[i + 1][j - 1].state + currentState.cells[i - 1][j + 1].state;
       if (currentState.cells[i][j].state == 0) {
         if (neighboringCount == 3) {
           cellsToChange.push_back(std::make_tuple(i, j));

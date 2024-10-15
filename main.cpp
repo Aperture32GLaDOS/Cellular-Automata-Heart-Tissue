@@ -1,13 +1,33 @@
 #include "cells.cpp"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_events.h>
+#include <SDL2/SDL_keycode.h>
+#include <SDL2/SDL_mouse.h>
 #include <SDL2/SDL_syswm.h>
 #include <SDL2/SDL_video.h>
 #include <chrono>
+#include <cstdlib>
 #include <thread>
 
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
+
+// Updates the cells in a seperate thread, so as to keep the render updates fast
+void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
+  long int startTime;
+  long int elapsedTime;
+  while (!(*quit)) {
+    startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    advanceCells(*cells);
+    elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - startTime;
+    if (elapsedTime <= *frameTime) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(*frameTime - elapsedTime));
+    }
+    while (*paused && !(*quit)) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    }
+  }
+}
 
 
 int main (int argc, char *argv[]) {
@@ -24,7 +44,7 @@ int main (int argc, char *argv[]) {
     for (int j = 0; j < cells.width; j++) {
       Cell newCell;
       newCell.type = CellType::Tissue;
-      if (std::rand() % 100 <= 50) {
+      if (rand() % 100 <= 50) {
         newCell.state = 0;
       }
       else {
@@ -38,25 +58,66 @@ int main (int argc, char *argv[]) {
   renderer = SDL_CreateRenderer(window, -1, 0);
   SDL_RenderPresent(renderer);
   bool quit = false;
+  bool paused = false;
   SDL_Event currentEvent;
-  long int startTime;
-  long int elapsedTime;
+  int xOffset = 0;
+  int yOffset = 0;
+  float zoomFactor = 1;
+  int mousePosX;
+  int mousePosY;
+  int frameTime = 500;
+  std::thread t(updateCells, &cells, &quit, &paused, &frameTime);
   while (!quit) {
-    // TODO: poll events while sleeping
-    // TODO: zoom in and pan around
     while (SDL_PollEvent(&currentEvent) != 0) {
       if (currentEvent.type == SDL_QUIT) {
         quit = true;
       }
+      else if (currentEvent.type == SDL_KEYDOWN) {
+        if (currentEvent.key.keysym.sym == SDLK_w) {
+          yOffset += 10;
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_s) {
+          yOffset -= 10;
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_a) {
+          xOffset += 10;
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_d) {
+          xOffset -= 10;
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_SPACE) {
+          paused = !paused;
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_EQUALS) {
+          frameTime -= 50;
+          if (frameTime == 0) {
+            frameTime = 50;
+          }
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_MINUS) {
+          frameTime += 50;
+        }
+      }
+      else if (currentEvent.type == SDL_MOUSEWHEEL) {
+        zoomFactor = zoomFactor + currentEvent.wheel.y;
+        if (zoomFactor < 1) {
+          zoomFactor = 1;
+        }
+      }
+      else if (currentEvent.type == SDL_MOUSEBUTTONDOWN) {
+        SDL_GetMouseState(&mousePosX, &mousePosY);
+        Cell* selectedCell = &cells.cells[(int) ((mousePosY / zoomFactor) - yOffset)][(int) ((mousePosX / zoomFactor) - xOffset)];
+        if (currentEvent.button.button == SDL_BUTTON_LEFT) {
+          selectedCell->state = 1;
+        }
+        else if (currentEvent.button.button == SDL_BUTTON_RIGHT) {
+          selectedCell->state = 0;
+        }
+      }
     }
-    startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    renderCells(cells, renderer, 0, 0, 1);
-    advanceCells(cells);
-    elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - startTime;
-    if (elapsedTime <= 500) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(500 - elapsedTime));
-    }
+    renderCells(cells, renderer, xOffset, yOffset, zoomFactor);
   }
+  t.join();
   SDL_DestroyWindow(window);
   SDL_Quit();
   return 0;
