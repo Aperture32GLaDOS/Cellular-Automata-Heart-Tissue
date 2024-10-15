@@ -1,3 +1,4 @@
+#include <SDL2/SDL_rect.h>
 #include <cstddef>
 #include <cstdlib>
 #include <cstdint>
@@ -143,14 +144,19 @@ void advanceCells(Cells currentState) {
 }
 
 // Renders the cells at a (currently) 1-1 ratio of cells to pixels
-void renderCells(Cells cells, SDL_Renderer* render) {
+void renderCells(Cells cells, SDL_Renderer* render, int xOffset, int yOffset, float zoomFactor) {
   SDL_SetRenderDrawColor(render, 0, 0, 0, 0);
   SDL_RenderClear(render);
   SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
+  SDL_FRect cell;
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
       if (cells.cells[i][j].state > 0) {
-        SDL_RenderDrawPoint(render, i, j);
+        cell.x = (j + xOffset) * zoomFactor;
+        cell.y = (i + yOffset) * zoomFactor;
+        cell.w = zoomFactor;
+        cell.h = zoomFactor;
+        SDL_RenderFillRectF(render, &cell);
       }
     }
   }

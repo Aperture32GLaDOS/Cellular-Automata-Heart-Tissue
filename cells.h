@@ -30,4 +30,4 @@ unsigned char* serializeCells(Cells currentState);
 // Inverse of serializeCells
 Cells readCells(unsigned char* serializedCells);
 
-void renderCells(Cells cells, SDL_Renderer* renderer);
+void renderCells(Cells cells, SDL_Renderer* renderer, int xOffset, int yOffset, float zoomFactor);
