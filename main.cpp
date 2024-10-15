@@ -8,9 +8,13 @@
 #include <chrono>
 #include <cstdlib>
 #include <thread>
+#include <mutex>
 
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
+
+
+std::mutex mu;
 
 // Updates the cells in a seperate thread, so as to keep the render updates fast
 void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
@@ -18,7 +22,10 @@ void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
   long int elapsedTime;
   while (!(*quit)) {
     startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    // Can only update cells when they are not being written or read from a file
+    std::unique_lock<std::mutex> lock(mu);
     advanceCells(*cells);
+    lock.unlock();
     elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - startTime;
     if (elapsedTime <= *frameTime) {
       std::this_thread::sleep_for(std::chrono::milliseconds(*frameTime - elapsedTime));
@@ -93,6 +100,17 @@ int main (int argc, char *argv[]) {
           if (frameTime == 0) {
             frameTime = 50;
           }
+        }
+        // Saves the current state to a file
+        else if (currentEvent.key.keysym.sym == SDLK_F1) {
+          std::unique_lock<std::mutex> lock(mu);
+          saveCellsToFile(cells, "cells.dmp");
+          lock.unlock();
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_F2) {
+          std::unique_lock<std::mutex> lock(mu);
+          cells = readCellsFromFile("cells.dmp");
+          lock.unlock();
         }
         else if (currentEvent.key.keysym.sym == SDLK_MINUS) {
           frameTime += 50;
