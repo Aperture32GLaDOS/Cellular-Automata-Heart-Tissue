@@ -43,7 +43,7 @@ unsigned char* serializeCells(Cells currentState) {
   return serializedData;
 }
 
-Cells readCells(uint8_t* serializedData) {
+Cells readCells(unsigned char* serializedData) {
   Cells cells;
   uint index = 0;
   cells.width = 0;
@@ -98,7 +98,7 @@ Cells readCellsFromFile(char* fileName) {
 
 void advanceCells(Cells currentState) {
   std::vector<std::tuple<int, int>> cellsToChange;
-  std::vector<uint> newStates;
+  std::vector<Cell> newCells;
   for (int i = 0; i < currentState.height; i++) {
     if (i == 0) {
       // TODO: remove this!
@@ -119,19 +119,26 @@ void advanceCells(Cells currentState) {
       if (currentState.cells[i][j].state == 0) {
         if (neighboringCount == 3) {
           cellsToChange.push_back(std::make_tuple(i, j));
-          newStates.push_back(1);
+          Cell newCell;
+          newCell.state = 1;
+          newCell.type = CellType::Tissue;
+          newCells.push_back(newCell);
         }
       }
       else {
         if (neighboringCount < 2 || neighboringCount > 3) {
           cellsToChange.push_back(std::make_tuple(i, j));
-          newStates.push_back(0);
+          Cell newCell;
+          newCell.state = 0;
+          newCell.type = CellType::Tissue;
+          newCells.push_back(newCell);
         }
       }
       if (false) {
         // Push the location of the cell and its new state
         cellsToChange.push_back(std::make_tuple(i, j));
-        newStates.push_back(0);
+        Cell newCell;
+        newCells.push_back(newCell);
       }
     }
   }
@@ -139,7 +146,7 @@ void advanceCells(Cells currentState) {
   // Set all changed states
   for (int i = 0; i < cellsToChange.size(); i++) {
     std::tuple<int, int> cellLocation = cellsToChange[i];
-    currentState.cells[std::get<0>(cellLocation)][std::get<1>(cellLocation)].state = newStates[i];
+    currentState.cells[std::get<0>(cellLocation)][std::get<1>(cellLocation)] = newCells[i];
   }
 }
 

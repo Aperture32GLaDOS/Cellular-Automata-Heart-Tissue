@@ -6,7 +6,8 @@
 enum CellType{
   // A heart cell here is represented either as a pacemaker cell, or a normal tissue cell
   Pacemaker,
-  Tissue
+  Tissue,
+  RestingTissue
 };
 
 // A cell is declared as a struct since it has no methods

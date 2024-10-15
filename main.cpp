@@ -51,12 +51,7 @@ int main (int argc, char *argv[]) {
     for (int j = 0; j < cells.width; j++) {
       Cell newCell;
       newCell.type = CellType::Tissue;
-      if (rand() % 100 <= 50) {
-        newCell.state = 0;
-      }
-      else {
-        newCell.state = 1;
-      }
+      newCell.state = 0;
       cells.cells[i][j] = newCell;
     }
   }
