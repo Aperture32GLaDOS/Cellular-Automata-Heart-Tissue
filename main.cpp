@@ -22,7 +22,7 @@ void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
   long int elapsedTime;
   while (!(*quit)) {
     startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    // Can only update cells when they are not being written or read from a file
+    // Lock the mutex, as data is being written
     std::unique_lock<std::mutex> lock(mu);
     advanceCells(*cells);
     lock.unlock();
@@ -130,6 +130,7 @@ int main (int argc, char *argv[]) {
       // When the user presses the mouse button, change the state of the cellular automata
       else if (currentEvent.type == SDL_MOUSEBUTTONDOWN) {
         SDL_GetMouseState(&mousePosX, &mousePosY);
+        std::unique_lock<std::mutex> lock(mu);
         Cell* selectedCell = &cells.cells[(int) ((mousePosY / zoomFactor) - yOffset)][(int) ((mousePosX / zoomFactor) - xOffset)];
         if (currentEvent.button.button == SDL_BUTTON_LEFT) {
           selectedCell->state = 1;
@@ -137,9 +138,19 @@ int main (int argc, char *argv[]) {
         else if (currentEvent.button.button == SDL_BUTTON_RIGHT) {
           selectedCell->state = 0;
         }
+        lock.unlock();
       }
     }
+    std::unique_lock<std::mutex> lock(mu);
     renderCells(cells, renderer, xOffset, yOffset, zoomFactor);
+    lock.unlock();
+    // Use fewer CPU cycles if paused
+    if (paused) {
+      SDL_Delay(25);
+    }
+    else {
+      SDL_Delay(10);
+    }
   }
   t.join();
   SDL_DestroyWindow(window);
