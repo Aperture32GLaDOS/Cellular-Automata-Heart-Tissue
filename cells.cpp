@@ -1,5 +1,6 @@
 #include <SDL2/SDL_rect.h>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <cstdint>
 #include <fstream>
@@ -28,7 +29,7 @@ unsigned char* serializeCells(Cells currentState) {
   // Serialize all the actual data
   for (int i = 0; i < currentState.height; i++) {
     for (int j = 0; j < currentState.width; j++) {
-      Cell currentCell = currentState.cells[i][j];
+      Cell currentCell = currentState.cells[i * currentState.height + j];
       // Serialize the cell type, followed by the state
       for (int k = 0; k < sizeof(CellType); k++) {
         serializedData[index] = (unsigned char) (currentCell.type >> (k * 8));
@@ -56,9 +57,8 @@ Cells readCells(unsigned char* serializedData) {
     cells.height = cells.height | (serializedData[index] << i * 8);
     index++;
   }
-  cells.cells = new Cell*[cells.height];
+  cells.cells = new Cell[cells.height * cells.width];
   for (int i = 0; i < cells.height; i++) {
-    cells.cells[i] = new Cell[cells.width];
     for (int j = 0; j < cells.width; j++) {
       Cell currentCell;
       currentCell.type = (CellType) 0;
@@ -71,7 +71,7 @@ Cells readCells(unsigned char* serializedData) {
         currentCell.state = currentCell.state | (serializedData[index] << k * 8);
         index++;
       }
-      cells.cells[i][j] = currentCell;
+      cells.cells[i * cells.height + j] = currentCell;
     }
   }
   return cells;
@@ -115,8 +115,8 @@ void advanceCells(Cells currentState) {
         break;
       }
       // Conway's game of life
-      int neighboringCount = currentState.cells[i + 1][j].state + currentState.cells[i - 1][j].state + currentState.cells[i + 1][j + 1].state + currentState.cells[i - 1][j - 1].state + currentState.cells[i][j + 1].state + currentState.cells[i][j - 1].state + currentState.cells[i + 1][j - 1].state + currentState.cells[i - 1][j + 1].state;
-      if (currentState.cells[i][j].state == 0) {
+      int neighboringCount = currentState.cells[(i + 1) * currentState.height + j].state + currentState.cells[(i - 1) * currentState.height + j].state + currentState.cells[(i + 1) * currentState.height + j + 1].state + currentState.cells[(i - 1) * currentState.height + j - 1].state + currentState.cells[i * currentState.height + j + 1].state + currentState.cells[i * currentState.height + j - 1].state + currentState.cells[(i + 1) * currentState.height + j - 1].state + currentState.cells[(i - 1) * currentState.height + j + 1].state;
+      if (currentState.cells[i * currentState.height + j].state == 0) {
         if (neighboringCount == 3) {
           cellsToChange.push_back(std::make_tuple(i, j));
           Cell newCell;
@@ -146,7 +146,7 @@ void advanceCells(Cells currentState) {
   // Set all changed states
   for (int i = 0; i < cellsToChange.size(); i++) {
     std::tuple<int, int> cellLocation = cellsToChange[i];
-    currentState.cells[std::get<0>(cellLocation)][std::get<1>(cellLocation)] = newCells[i];
+    currentState.cells[std::get<0>(cellLocation) * currentState.height + std::get<1>(cellLocation)] = newCells[i];
   }
 }
 
@@ -158,7 +158,7 @@ void renderCells(Cells cells, SDL_Renderer* render, int xOffset, int yOffset, fl
   SDL_FRect cell;
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
-      if (cells.cells[i][j].state > 0) {
+      if (cells.cells[i * cells.height + j].state > 0) {
         cell.x = (j + xOffset) * zoomFactor;
         cell.y = (i + yOffset) * zoomFactor;
         cell.w = zoomFactor;

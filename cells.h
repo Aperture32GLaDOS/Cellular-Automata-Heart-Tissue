@@ -20,7 +20,9 @@ struct Cell {
 struct Cells {
   uint width;
   uint height;
-  Cell** cells;
+  // 2D array is represented as one contiguous block of memory, for performance reasons
+  // (indexed [i][j] would be [i * height + j])
+  Cell* cells;
 };
 
 void advanceCells(Cells currentState);

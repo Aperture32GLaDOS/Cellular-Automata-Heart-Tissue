@@ -45,14 +45,13 @@ int main (int argc, char *argv[]) {
   Cells cells;
   cells.width = SIZE;
   cells.height = SIZE;
-  cells.cells = new Cell*[cells.height];
+  cells.cells = new Cell[cells.height * cells.width];
   for (int i = 0; i < cells.height; i++) {
-    cells.cells[i] = new Cell[cells.width];
     for (int j = 0; j < cells.width; j++) {
       Cell newCell;
       newCell.type = CellType::Tissue;
       newCell.state = 0;
-      cells.cells[i][j] = newCell;
+      cells.cells[i * cells.height + j] = newCell;
     }
   }
   window = SDL_CreateWindow("Heart Tissue", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -131,7 +130,7 @@ int main (int argc, char *argv[]) {
       else if (currentEvent.type == SDL_MOUSEBUTTONDOWN) {
         SDL_GetMouseState(&mousePosX, &mousePosY);
         std::unique_lock<std::mutex> lock(mu);
-        Cell* selectedCell = &cells.cells[(int) ((mousePosY / zoomFactor) - yOffset)][(int) ((mousePosX / zoomFactor) - xOffset)];
+        Cell* selectedCell = &cells.cells[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.height + (int) ((mousePosX / zoomFactor) - xOffset)];
         if (currentEvent.button.button == SDL_BUTTON_LEFT) {
           selectedCell->state = 1;
         }
