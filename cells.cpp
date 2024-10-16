@@ -151,7 +151,7 @@ void advanceCells(Cells currentState) {
 }
 
 // Renders the cells at a (currently) 1-1 ratio of cells to pixels
-void renderCells(Cells cells, SDL_Renderer* render, int xOffset, int yOffset, float zoomFactor) {
+void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset, float zoomFactor) {
   SDL_SetRenderDrawColor(render, 0, 0, 0, 0);
   SDL_RenderClear(render);
   SDL_SetRenderDrawColor(render, 255, 0, 0, 255);

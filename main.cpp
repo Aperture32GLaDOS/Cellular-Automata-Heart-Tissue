@@ -61,8 +61,8 @@ int main (int argc, char *argv[]) {
   bool quit = false;
   bool paused = false;
   SDL_Event currentEvent;
-  int xOffset = 0;
-  int yOffset = 0;
+  float xOffset = 0;
+  float yOffset = 0;
   float zoomFactor = 1;
   int mousePosX;
   int mousePosY;
@@ -104,6 +104,7 @@ int main (int argc, char *argv[]) {
         else if (currentEvent.key.keysym.sym == SDLK_F2) {
           std::unique_lock<std::mutex> lock(mu);
           cells = readCellsFromFile("cells.dmp");
+          SDL_SetWindowSize(window, cells.width, cells.height);
           lock.unlock();
         }
         else if (currentEvent.key.keysym.sym == SDLK_MINUS) {
@@ -114,8 +115,8 @@ int main (int argc, char *argv[]) {
         // Zooms into where the user's cursor is
         SDL_GetMouseState(&mousePosX, &mousePosY);
         // Calculate the selected X and Y pixel
-        int selectedX = (mousePosX / zoomFactor) - xOffset;
-        int selectedY = (mousePosY / zoomFactor) - yOffset;
+        float selectedX = (mousePosX / zoomFactor) - xOffset;
+        float selectedY = (mousePosY / zoomFactor) - yOffset;
         zoomFactor = zoomFactor + currentEvent.wheel.y;
         if (zoomFactor < 1) {
           zoomFactor = 1;
