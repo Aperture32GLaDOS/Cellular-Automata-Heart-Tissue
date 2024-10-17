@@ -93,7 +93,10 @@ Cells readCellsFromFile(char* fileName) {
   inputStream.seekg(0, std::ios::beg);
   unsigned char* data = new unsigned char[length];
   inputStream.read((char*) data, length);
-  return readCells(data);
+  Cells output = readCells(data);
+  // Free the memory space
+  delete[] data;
+  return output;
 }
 
 void advanceCells(Cells currentState) {

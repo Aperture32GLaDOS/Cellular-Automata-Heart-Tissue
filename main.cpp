@@ -103,6 +103,8 @@ int main (int argc, char *argv[]) {
         }
         else if (currentEvent.key.keysym.sym == SDLK_F2) {
           std::unique_lock<std::mutex> lock(mu);
+          // Delete the old array so as to avoid a memory leak
+          delete[] cells.cells;
           cells = readCellsFromFile("cells.dmp");
           SDL_SetWindowSize(window, cells.width, cells.height);
           lock.unlock();
