@@ -67,7 +67,7 @@ int main (int argc, char *argv[]) {
   int mousePosX;
   int mousePosY;
   int frameTime = 500;
-  std::thread t(updateCells, &cells, &quit, &paused, &frameTime);
+  std::thread updateThread(updateCells, &cells, &quit, &paused, &frameTime);
   while (!quit) {
     while (SDL_PollEvent(&currentEvent) != 0) {
       if (currentEvent.type == SDL_QUIT) {
@@ -154,7 +154,7 @@ int main (int argc, char *argv[]) {
       SDL_Delay(10);
     }
   }
-  t.join();
+  updateThread.join();
   SDL_DestroyWindow(window);
   SDL_Quit();
   return 0;
