@@ -20,11 +20,25 @@ std::mutex mu;
 void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
   long int startTime;
   long int elapsedTime;
+  int* searchOffsets = new int[2 * SEARCH_RADIUS * SEARCH_RADIUS];
+  int offsetLength = 0;
+  int counter = -1;
+  for (int i = -(SEARCH_RADIUS / 2); i <= (SEARCH_RADIUS / 2); i++) {
+    for (int j = -(SEARCH_RADIUS / 2); j <= (SEARCH_RADIUS / 2); j++) {
+      if (i == 0 && j == 0) continue;
+      if ((i * i) + (j * j) <= (SEARCH_RADIUS / 2) * (SEARCH_RADIUS / 2)) {
+        searchOffsets[offsetLength] = i;
+        searchOffsets[offsetLength + 1] = j;
+        offsetLength += 2;
+      }
+    }
+  }
+  offsetLength -= 2;
   while (!(*quit)) {
     startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     // Lock the mutex, as data is being written
     std::unique_lock<std::mutex> lock(mu);
-    advanceCells(*cells);
+    advanceCells(*cells, searchOffsets, offsetLength);
     lock.unlock();
     elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - startTime;
     if (elapsedTime <= *frameTime) {
@@ -52,6 +66,11 @@ int main (int argc, char *argv[]) {
       newCell.type = CellType::Tissue;
       newCell.state = 0;
       cells.cells[i * cells.height + j] = newCell;
+    }
+  }
+  for (int i = -3; i <= 3; i++) {
+    for (int j = -3; j <= 3; j++) {
+      cells.cells[(cells.height / 2 + i) * cells.height + (cells.width / 2 + j)].type = CellType::Pacemaker;
     }
   }
   window = SDL_CreateWindow("Heart Tissue", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -135,11 +154,12 @@ int main (int argc, char *argv[]) {
         std::unique_lock<std::mutex> lock(mu);
         Cell* selectedCell = &cells.cells[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.height + (int) ((mousePosX / zoomFactor) - xOffset)];
         if (currentEvent.button.button == SDL_BUTTON_LEFT) {
-          selectedCell->state = 1;
+          selectedCell->state = AP_DURATION;
         }
         else if (currentEvent.button.button == SDL_BUTTON_RIGHT) {
-          selectedCell->state = 0;
+          if (selectedCell-> state != 0) selectedCell->state = selectedCell->state - 1;
         }
+        // TODO: change tissue type on shift-right click (or similar)
         lock.unlock();
       }
     }

@@ -99,41 +99,83 @@ Cells readCellsFromFile(char* fileName) {
   return output;
 }
 
-void advanceCells(Cells currentState) {
+void advanceCells(Cells currentState, int* searchOffsets, int offsetLength) {
   std::vector<std::tuple<int, int>> cellsToChange;
   std::vector<Cell> newCells;
   for (int i = 0; i < currentState.height; i++) {
-    if (i == 0) {
-      // TODO: remove this!
-      continue;
-    }
-    if (i == currentState.height - 1) {
-      break;
-    }
     for (int j = 0; j < currentState.width; j++) {
-      if (j == 0) {
-        continue;
-      }
-      if (j == currentState.width - 1) {
-        break;
-      }
-      // Conway's game of life
-      int neighboringCount = currentState.cells[(i + 1) * currentState.height + j].state + currentState.cells[(i - 1) * currentState.height + j].state + currentState.cells[(i + 1) * currentState.height + j + 1].state + currentState.cells[(i - 1) * currentState.height + j - 1].state + currentState.cells[i * currentState.height + j + 1].state + currentState.cells[i * currentState.height + j - 1].state + currentState.cells[(i + 1) * currentState.height + j - 1].state + currentState.cells[(i - 1) * currentState.height + j + 1].state;
-      if (currentState.cells[i * currentState.height + j].state == 0) {
-        if (neighboringCount == 3) {
-          cellsToChange.push_back(std::make_tuple(i, j));
-          Cell newCell;
-          newCell.state = 1;
-          newCell.type = CellType::Tissue;
-          newCells.push_back(newCell);
+      // TODO: optimize the hell out of this!!!
+      // Potential ideas:
+      // 1.
+      //  GPU utilization - would definitely make it go like the clappers, but will be VERY hard to implement (complete rewrite of rendering engine,
+      //  and working with Vulkan is notoriously difficult)
+      // 2.
+      //  Efficient convolution algorithms - the search algorithm can be described as a convolution problem, which have very clever algorithms
+      //  To solve them in very quick time
+      int neighborCount = 0;
+      Cell currentCell = currentState.cells[i * currentState.height + j];
+      Cell newCell;
+      // Pacemaker cells are constantly in their action potential
+      if (currentCell.type == CellType::Pacemaker) {
+        cellsToChange.push_back(std::make_tuple(i, j));
+        newCell.type = CellType::Pacemaker;
+        if (currentCell.state == 0) {
+          newCell.state = AP_DURATION;
         }
+        else {
+          newCell.state = currentCell.state - 1;
+        }
+        newCells.push_back(newCell);
       }
-      else {
-        if (neighboringCount < 2 || neighboringCount > 3) {
-          cellsToChange.push_back(std::make_tuple(i, j));
-          Cell newCell;
-          newCell.state = 0;
+      // Resting tissue reactivates into normal tissue eventually
+      else if (currentCell.type == CellType::RestingTissue) {
+        cellsToChange.push_back(std::make_tuple(i, j));
+        if (currentCell.state == 1) {
           newCell.type = CellType::Tissue;
+          newCell.state = 0;
+        }
+        else {
+          newCell.type = CellType::RestingTissue;
+          newCell.state = currentCell.state - 1;
+        }
+        newCells.push_back(newCell);
+      }
+      // If condition here so that more enum variants may be added
+      else if (currentCell.type == CellType::Tissue) {
+        bool doChange = true;
+        // Only search if the cell is not excited
+        if (currentCell.state == 0) {
+          doChange = false;
+          // Search in a radius around the current cell
+          for (int k = 0; k < offsetLength; k+=2) {
+            int searchI = searchOffsets[k];
+            int searchJ = searchOffsets[k + 1];
+            int distanceToNeighbor = (searchI * searchI) + (searchJ * searchJ);
+            if (i + searchI >= 0 && i + searchI < currentState.height && j + searchJ >= 0 && j + searchJ < currentState.width) {
+              Cell neighbor = currentState.cells[(i + searchI) * currentState.height + (j + searchJ)];
+              // If a cell is resting, then it cannot excite surrounding tissue
+              if (neighbor.type != CellType::RestingTissue) {
+                neighborCount += neighbor.state / distanceToNeighbor;
+              }
+            }
+          }
+          doChange = neighborCount >= AP_THRESHOLD;
+        }
+        if (doChange) {
+          Cell newCell;
+          if (currentCell.state == 0) {
+            newCell.type = CellType::Tissue;
+            newCell.state = AP_DURATION;
+          }
+          else if (currentCell.state == 1) {
+            newCell.type = CellType::RestingTissue;
+            newCell.state = REST_DURATION;
+          }
+          else {
+            newCell.type = CellType::Tissue;
+            newCell.state = currentCell.state - 1;
+          }
+          cellsToChange.push_back(std::make_tuple(i, j));
           newCells.push_back(newCell);
         }
       }
@@ -155,13 +197,14 @@ void advanceCells(Cells currentState) {
 
 // Renders the cells at a (currently) 1-1 ratio of cells to pixels
 void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset, float zoomFactor) {
+  // TODO: render different colours depending on cell state
   SDL_SetRenderDrawColor(render, 0, 0, 0, 0);
   SDL_RenderClear(render);
   SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
   SDL_FRect cell;
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
-      if (cells.cells[i * cells.height + j].state > 0) {
+      if (cells.cells[i * cells.height + j].state > 0 && cells.cells[i * cells.height + j].type != CellType::RestingTissue) {
         cell.x = (j + xOffset) * zoomFactor;
         cell.y = (i + yOffset) * zoomFactor;
         cell.w = zoomFactor;
