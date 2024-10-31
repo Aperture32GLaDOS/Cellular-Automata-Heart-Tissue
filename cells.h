@@ -2,10 +2,6 @@
 #include <sys/types.h>
 #include <SDL2/SDL_render.h>
 #define SIZE 1000
-#define SEARCH_RADIUS 8
-#define AP_DURATION 10
-#define REST_DURATION 7
-#define AP_THRESHOLD 16
 
 enum CellType{
   // A heart cell here is represented either as a pacemaker cell, or a normal tissue cell
@@ -29,7 +25,7 @@ struct Cells {
   Cell* cells;
 };
 
-void advanceCells(Cells currentState, int* searchOffsets, int offsetLength);
+void advanceCells(Cells currentState);
 
 // Turn a 2D array of cells into a 1D array of bytes (i.e. for dumping to a file)
 unsigned char* serializeCells(Cells currentState);
