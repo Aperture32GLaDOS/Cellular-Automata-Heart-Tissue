@@ -1,5 +1,4 @@
 #include "cells.cpp"
-#include "fft.cpp"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_keycode.h>
@@ -56,21 +55,6 @@ int main (int argc, char *argv[]) {
   if (SDL_Init(SDL_INIT_VIDEO) < 0) {
     return 0;
   }
-  // Test 2D fft
-  std::complex<double>* array = new std::complex<double>[32];
-  for (int i = 0; i < 32; i++) {
-    if (i % 2 == 0) {
-      array[i * 32] = std::complex(420.0, 0.0);
-    }
-    else {
-      array[i * 32] = std::complex(0.0, 0.0);
-    }
-  }
-  std::cout << array[16] << std::endl;
-  FFT(array, 32, 1);
-  std::cout << array[16] << std::endl;
-  FFT(array, 32, -1);
-  std::cout << array[16] << std::endl;
   // Declare the 2D plane of cells
   Cells cells;
   cells.width = SIZE;
