@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
+set(CMAKE_CXX_FLAGS "-O3 -Wall -Wextra")
+
 
 project(Cellular_Automata_Heart_Tissue
   VERSION 1.0
