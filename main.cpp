@@ -7,9 +7,9 @@
 #include <SDL2/SDL_video.h>
 #include <chrono>
 #include <cstdlib>
+#include <fftw3.h>
 #include <thread>
 #include <mutex>
-#include <fftw3.h>
 
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
@@ -21,31 +21,41 @@ std::mutex mu;
 void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
   long int startTime;
   long int elapsedTime;
-  int* searchOffsets = new int[2 * SEARCH_RADIUS * SEARCH_RADIUS];
+  double* distanceCoefficients = fftw_alloc_real(cells->height * cells->width);
   int offsetLength = 0;
-  int counter = -1;
-  for (int i = -(SEARCH_RADIUS / 2); i <= (SEARCH_RADIUS / 2); i++) {
-    for (int j = -(SEARCH_RADIUS / 2); j <= (SEARCH_RADIUS / 2); j++) {
-      if (i == 0 && j == 0) continue;
-      if ((i * i) + (j * j) <= (SEARCH_RADIUS / 2) * (SEARCH_RADIUS / 2)) {
-        searchOffsets[offsetLength] = i;
-        searchOffsets[offsetLength + 1] = j;
-        offsetLength += 2;
+  double* stateArray = fftw_alloc_real(cells->height * cells->width);
+  fftw_complex* stateArrayTransformed = fftw_alloc_complex(cells->height * cells->width);
+  double* distanceArray = fftw_alloc_real(cells->height * cells->width);
+  for (int i = 0; i < cells->height * cells->width; i++) {
+    distanceCoefficients[i] = 0.0;
+  }
+  for (int i = 0; i < cells->height; i++) {
+    for (int j = 0; j < cells->width; j++) {
+      if (i == cells->height / 2 && j == cells->width / 2) continue;
+      double distance = (i - (double) cells->height / 2.0) * (i - (double) cells->height / 2.0) + (j - (double) cells->width / 2.0) * (j - (double) cells->width / 2.0);
+      distanceCoefficients [i * cells->height + j]= 1.0 / distance;
+      Cell currentCell = cells->cells[i * cells->height + j];
+      if (currentCell.type != CellType::RestingTissue) {
+        stateArray[i * cells->height + j] = currentCell.state;
+      }
+      else {
+        stateArray[i * cells->height + j] = 0.0;
       }
     }
   }
-  offsetLength -= 2;
-  double* searchCoefficients = new double[offsetLength / 2];
-  for (int i = 0; i < offsetLength; i+=2) {
-    double iOffset = searchOffsets[i];
-    double jOffset = searchOffsets[i + 1];
-    searchCoefficients[i / 2] = 1 / ((iOffset * iOffset) + (jOffset * jOffset));
-  }
+  fftw_complex* distanceCoefficientsTransformed = fftw_alloc_complex(cells->height * cells->width);
+  fftw_plan distanceCoefficientsFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, distanceCoefficients, distanceCoefficientsTransformed, 0);
+  fftw_execute(distanceCoefficientsFFT);
+  // The coeffients never change, and therefore only need to be transformed once
+  fftw_destroy_plan(distanceCoefficientsFFT);
+  fftw_free(distanceCoefficients);
+  fftw_plan stateArrayFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, stateArray, stateArrayTransformed, 0);
+  fftw_plan stateArrayIFFT = fftw_plan_dft_c2r_2d(cells->height, cells->width, stateArrayTransformed, distanceArray, 0);
   while (!(*quit)) {
     startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     // Lock the mutex, as data is being written
     std::unique_lock<std::mutex> lock(mu);
-    advanceCells(*cells, searchOffsets, offsetLength, searchCoefficients);
+    advanceCells(*cells, distanceCoefficientsTransformed, stateArray, stateArrayTransformed, distanceArray, stateArrayFFT, stateArrayIFFT);
     lock.unlock();
     elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - startTime;
     if (elapsedTime <= *frameTime) {

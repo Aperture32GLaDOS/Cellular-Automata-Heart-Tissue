@@ -7,6 +7,7 @@
 #include <iostream>
 #include <tuple>
 #include <vector>
+#include <fftw3.h>
 #include "cells.h"
 
 uint getSizeOfData(Cells data) {
@@ -99,20 +100,26 @@ Cells readCellsFromFile(char* fileName) {
   return output;
 }
 
-void advanceCells(Cells currentState, int* searchOffsets, int offsetLength, double* searchCoefficients) {
+void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double* stateArray, fftw_complex* stateArrayTransformed, double* distanceArray, fftw_plan stateArrayFFT, fftw_plan stateArrayIFFT) {
   std::vector<std::tuple<int, int>> cellsToChange;
   std::vector<Cell> newCells;
+  fftw_execute(stateArrayFFT);
   for (int i = 0; i < currentState.height; i++) {
     for (int j = 0; j < currentState.width; j++) {
-      // TODO: optimize the hell out of this!!!
-      // Potential ideas:
-      // 1.
-      //  GPU utilization - would definitely make it go like the clappers, but will be VERY hard to implement (complete rewrite of rendering engine,
-      //  and working with Vulkan is notoriously difficult)
-      // 2.
-      //  Efficient convolution algorithms - the search algorithm can be described as a convolution problem, which have very clever algorithms
-      //  To solve them in very quick time
-      double neighborCount = 0;
+      fftw_complex stateArrayElement = {0.0, 0.0};
+      fftw_complex distanceCoefficient = {0.0, 0.0};
+      stateArrayElement[0] = stateArrayTransformed[i * currentState.height + j][0];
+      stateArrayElement[1] = stateArrayTransformed[i * currentState.height + j][1];
+      distanceCoefficient[0] = distanceCoefficients[i * currentState.height + j][0];
+      distanceCoefficient[1] = distanceCoefficients[i * currentState.height + j][1];
+      stateArrayTransformed[i * currentState.height + j][0] = (stateArrayElement[0] * distanceCoefficient[0] - stateArrayElement[1] * distanceCoefficient[1]) / (currentState.height * currentState.width);
+      stateArrayTransformed[i * currentState.height + j][1] = (stateArrayElement[0] * distanceCoefficient[1] + stateArrayElement[1] * distanceCoefficient[0]) / (currentState.height * currentState.width);
+    }
+  }
+  fftw_execute(stateArrayIFFT);
+  for (int i = 0; i < currentState.height; i++) {
+    for (int j = 0; j < currentState.width; j++) {
+      double neighborCount = distanceArray[i * currentState.height + j];
       Cell currentCell = currentState.cells[i * currentState.height + j];
       Cell newCell;
       // Pacemaker cells are constantly in their action potential
@@ -125,6 +132,7 @@ void advanceCells(Cells currentState, int* searchOffsets, int offsetLength, doub
         else {
           newCell.state = currentCell.state - 1;
         }
+        stateArray[i * currentState.height + j] = newCell.state;
         newCells.push_back(newCell);
       }
       // Resting tissue reactivates into normal tissue eventually
@@ -147,18 +155,6 @@ void advanceCells(Cells currentState, int* searchOffsets, int offsetLength, doub
         if (currentCell.state == 0) {
           doChange = false;
           // Search in a radius around the current cell
-          for (int k = 0; k < offsetLength; k+=2) {
-            double coefficient = searchCoefficients[k / 2];
-            int searchI = searchOffsets[k];
-            int searchJ = searchOffsets[k + 1];
-            if (i + searchI >= 0 && i + searchI < currentState.height && j + searchJ >= 0 && j + searchJ < currentState.width) {
-              Cell neighbor = currentState.cells[(i + searchI) * currentState.height + (j + searchJ)];
-              // If a cell is resting, then it cannot excite surrounding tissue
-              if (neighbor.type != CellType::RestingTissue) {
-                neighborCount += ((double) neighbor.state) * coefficient;
-              }
-            }
-          }
           doChange = neighborCount >= AP_THRESHOLD;
         }
         if (doChange) {
@@ -174,6 +170,12 @@ void advanceCells(Cells currentState, int* searchOffsets, int offsetLength, doub
           else {
             newCell.type = CellType::Tissue;
             newCell.state = currentCell.state - 1;
+          }
+          if (newCell.type == CellType::RestingTissue) {
+            stateArray[i * currentState.height + j] = 0;
+          }
+          else {
+            stateArray[i * currentState.height + j] = newCell.state;
           }
           cellsToChange.push_back(std::make_tuple(i, j));
           newCells.push_back(newCell);

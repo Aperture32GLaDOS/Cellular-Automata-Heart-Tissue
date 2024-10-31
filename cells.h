@@ -1,7 +1,7 @@
 #include <cstdint>
 #include <sys/types.h>
 #include <SDL2/SDL_render.h>
-#define SIZE 1000
+#define SIZE 1024
 #define SEARCH_RADIUS 64
 #define AP_DURATION 10
 #define REST_DURATION 7
