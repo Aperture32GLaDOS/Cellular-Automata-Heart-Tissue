@@ -44,6 +44,7 @@ void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
     if (elapsedTime <= *frameTime) {
       std::this_thread::sleep_for(std::chrono::milliseconds(*frameTime - elapsedTime));
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(25));
     while (*paused && !(*quit)) {
       std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
