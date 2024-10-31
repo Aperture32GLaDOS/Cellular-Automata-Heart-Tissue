@@ -34,11 +34,17 @@ void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
     }
   }
   offsetLength -= 2;
+  double* searchCoefficients = new double[offsetLength / 2];
+  for (int i = 0; i < offsetLength; i+=2) {
+    double iOffset = searchOffsets[i];
+    double jOffset = searchOffsets[i + 1];
+    searchCoefficients[i / 2] = 1 / ((iOffset * iOffset) + (jOffset * jOffset));
+  }
   while (!(*quit)) {
     startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     // Lock the mutex, as data is being written
     std::unique_lock<std::mutex> lock(mu);
-    advanceCells(*cells, searchOffsets, offsetLength);
+    advanceCells(*cells, searchOffsets, offsetLength, searchCoefficients);
     lock.unlock();
     elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - startTime;
     if (elapsedTime <= *frameTime) {

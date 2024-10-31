@@ -2,10 +2,10 @@
 #include <sys/types.h>
 #include <SDL2/SDL_render.h>
 #define SIZE 1000
-#define SEARCH_RADIUS 8
+#define SEARCH_RADIUS 64
 #define AP_DURATION 10
 #define REST_DURATION 7
-#define AP_THRESHOLD 16
+#define AP_THRESHOLD 15
 
 enum CellType{
   // A heart cell here is represented either as a pacemaker cell, or a normal tissue cell

@@ -99,7 +99,7 @@ Cells readCellsFromFile(char* fileName) {
   return output;
 }
 
-void advanceCells(Cells currentState, int* searchOffsets, int offsetLength) {
+void advanceCells(Cells currentState, int* searchOffsets, int offsetLength, double* searchCoefficients) {
   std::vector<std::tuple<int, int>> cellsToChange;
   std::vector<Cell> newCells;
   for (int i = 0; i < currentState.height; i++) {
@@ -112,7 +112,7 @@ void advanceCells(Cells currentState, int* searchOffsets, int offsetLength) {
       // 2.
       //  Efficient convolution algorithms - the search algorithm can be described as a convolution problem, which have very clever algorithms
       //  To solve them in very quick time
-      int neighborCount = 0;
+      double neighborCount = 0;
       Cell currentCell = currentState.cells[i * currentState.height + j];
       Cell newCell;
       // Pacemaker cells are constantly in their action potential
@@ -148,14 +148,14 @@ void advanceCells(Cells currentState, int* searchOffsets, int offsetLength) {
           doChange = false;
           // Search in a radius around the current cell
           for (int k = 0; k < offsetLength; k+=2) {
+            double coefficient = searchCoefficients[k / 2];
             int searchI = searchOffsets[k];
             int searchJ = searchOffsets[k + 1];
-            int distanceToNeighbor = (searchI * searchI) + (searchJ * searchJ);
             if (i + searchI >= 0 && i + searchI < currentState.height && j + searchJ >= 0 && j + searchJ < currentState.width) {
               Cell neighbor = currentState.cells[(i + searchI) * currentState.height + (j + searchJ)];
               // If a cell is resting, then it cannot excite surrounding tissue
               if (neighbor.type != CellType::RestingTissue) {
-                neighborCount += neighbor.state / distanceToNeighbor;
+                neighborCount += ((double) neighbor.state) * coefficient;
               }
             }
           }
