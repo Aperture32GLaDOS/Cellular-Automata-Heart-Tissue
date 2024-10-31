@@ -9,5 +9,8 @@ project(Cellular_Automata_Heart_Tissue
 
 add_executable(main main.cpp)
 find_package(SDL2 REQUIRED)
+find_package(FFTW3 REQUIRED)
 target_include_directories(main PRIVATE ${SDL2_INCLUDE_DIRS})
+target_include_directories(main PRIVATE ${FFTW3_INCLUDE_DIRS})
 target_link_libraries(main ${SDL2_LIBRARIES})
+target_link_libraries(main ${FFTW3_LIBRARIES})

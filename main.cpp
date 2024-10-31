@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <thread>
 #include <mutex>
+#include <fftw3.h>
 
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
