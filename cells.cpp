@@ -198,7 +198,7 @@ void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double
 }
 
 // Renders the cells at a (currently) 1-1 ratio of cells to pixels
-void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset, float zoomFactor) {
+void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset, float zoomFactor, int selectedCellI, int selectedCellJ) {
   // TODO: render different colours depending on cell state
   SDL_SetRenderDrawColor(render, 0, 0, 0, 0);
   SDL_RenderClear(render);
@@ -206,7 +206,20 @@ void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset
   SDL_FRect cell;
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
-      if (cells.cells[i * cells.height + j].state > 0 && cells.cells[i * cells.height + j].type != CellType::RestingTissue) {
+      SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
+      Cell currentCell = cells.cells[i * cells.height + j];
+      if (i == selectedCellI && j == selectedCellJ) {
+        SDL_SetRenderDrawColor(render, 100, 100, 100, 255);
+        cell.x = (j + xOffset) * zoomFactor;
+        cell.y = (i + yOffset) * zoomFactor;
+        cell.w = zoomFactor;
+        cell.h = zoomFactor;
+        SDL_RenderFillRectF(render, &cell);
+      }
+      if (currentCell.state > 0 && currentCell.type != CellType::RestingTissue) {
+        if (currentCell.type == Pacemaker) {
+          SDL_SetRenderDrawColor(render, 255, 0, 255, 255);
+        }
         cell.x = (j + xOffset) * zoomFactor;
         cell.y = (i + yOffset) * zoomFactor;
         cell.w = zoomFactor;

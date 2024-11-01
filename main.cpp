@@ -187,10 +187,26 @@ int main (int argc, char *argv[]) {
         else if (currentEvent.key.keysym.sym == SDLK_MINUS) {
           frameTime += 50;
         }
+        // Equivalent to giving a shock to the whole heart
+        else if (currentEvent.key.keysym.sym == SDLK_g) {
+          std::unique_lock<std::mutex> lock(mu);
+          for (int i = 0; i < cells.height * cells.width; i++) {
+            Cell selectedCell = cells.cells[i];
+            if (selectedCell.type == CellType::RestingTissue) {
+              continue;
+            }
+            selectedCell.state = AP_DURATION;
+            cells.cells[i] = selectedCell;
+            stateArray[i] = 0.0;
+          }
+          lock.unlock();
+        }
+      }
+      // Keep the mousePosX and mousePosY updated
+      else if (currentEvent.type == SDL_MOUSEMOTION) {
+        SDL_GetMouseState(&mousePosX, &mousePosY);
       }
       else if (currentEvent.type == SDL_MOUSEWHEEL) {
-        // Zooms into where the user's cursor is
-        SDL_GetMouseState(&mousePosX, &mousePosY);
         // Calculate the selected X and Y pixel
         float selectedX = (mousePosX / zoomFactor) - xOffset;
         float selectedY = (mousePosY / zoomFactor) - yOffset;
@@ -216,7 +232,7 @@ int main (int argc, char *argv[]) {
           }
         }
         else if (currentEvent.button.button == SDL_BUTTON_RIGHT) {
-          if (selectedCell-> state != 0) selectedCell->state = selectedCell->state - 1;
+          if (selectedCell-> state != 0 && selectedCell->type != CellType::RestingTissue) selectedCell->state = 0;
           if (selectedCell->type != CellType::RestingTissue) {
             stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.height + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
           }
@@ -226,7 +242,7 @@ int main (int argc, char *argv[]) {
       }
     }
     std::unique_lock<std::mutex> lock(mu);
-    renderCells(cells, renderer, xOffset, yOffset, zoomFactor);
+    renderCells(cells, renderer, xOffset, yOffset, zoomFactor, ((int) ((mousePosY / zoomFactor) - yOffset)), (int) ((mousePosX / zoomFactor) - xOffset));
     lock.unlock();
     // Use fewer CPU cycles if paused
     if (paused) {
