@@ -56,7 +56,7 @@ void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime, double*
   for (int i = 0; i < SEARCH_RADIUS; i++) {
     for (int j = 0; j < SEARCH_RADIUS; j++) {
       if (i == SEARCH_RADIUS / 2 && j == SEARCH_RADIUS / 2) continue;
-      double distance = (i - (double) SEARCH_RADIUS / 2.0) * (i - (double) SEARCH_RADIUS / 2.0) + (j - (double) SEARCH_RADIUS / 2.0) * (j - (double) SEARCH_RADIUS / 2.0);
+      double distance = (i - SEARCH_RADIUS / 2) * (i - SEARCH_RADIUS / 2) + (j - SEARCH_RADIUS / 2) * (j - SEARCH_RADIUS / 2);
       distanceCoefficients [i * SEARCH_RADIUS + j]= 1.0 / distance;
     }
   }
@@ -211,9 +211,15 @@ int main (int argc, char *argv[]) {
         Cell* selectedCell = &cells.cells[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.height + (int) ((mousePosX / zoomFactor) - xOffset)];
         if (currentEvent.button.button == SDL_BUTTON_LEFT) {
           selectedCell->state = AP_DURATION;
+          if (selectedCell->type != CellType::RestingTissue) {
+            stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.height + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+          }
         }
         else if (currentEvent.button.button == SDL_BUTTON_RIGHT) {
           if (selectedCell-> state != 0) selectedCell->state = selectedCell->state - 1;
+          if (selectedCell->type != CellType::RestingTissue) {
+            stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.height + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+          }
         }
         // TODO: change tissue type on shift-right click (or similar)
         lock.unlock();
