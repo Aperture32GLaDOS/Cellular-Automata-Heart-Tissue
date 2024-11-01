@@ -85,7 +85,9 @@ void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameT
       std::this_thread::sleep_for(std::chrono::milliseconds(250));
       if (*step) {
         *step = false;
-        break;
+        std::unique_lock<std::mutex> lock(mu);
+        advanceCells(*cells, distanceCoefficientsTransformed, stateArray, stateArrayTransformed, distanceArray, stateArrayFFT, stateArrayIFFT);
+        lock.unlock();
       }
     }
   }
