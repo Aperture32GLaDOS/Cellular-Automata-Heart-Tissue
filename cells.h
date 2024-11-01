@@ -5,7 +5,7 @@
 #define SEARCH_RADIUS 64
 #define AP_DURATION 10
 #define REST_DURATION 7
-#define AP_THRESHOLD 15
+#define AP_THRESHOLD 30
 
 enum CellType{
   // A heart cell here is represented either as a pacemaker cell, or a normal tissue cell

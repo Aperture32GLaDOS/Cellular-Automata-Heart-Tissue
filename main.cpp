@@ -17,38 +17,58 @@ SDL_Renderer* renderer = NULL;
 
 std::mutex mu;
 
+// Cyclically shifts a convolution to expand it, i.e. for padding reasons
+void shiftConvolution(double* originalConvolution, double* shiftedConvolution, int convWidth, int dataHeight, int dataLength) {
+  //Top left corner (shifted so that the middle element of the convolution is now at (0, 0))
+  for (int i = convWidth / 2; i < convWidth; i++) {
+    for (int j = convWidth / 2; j < convWidth; j++) {
+      shiftedConvolution[(i - (convWidth / 2)) * dataHeight + (j - (convWidth / 2))] = originalConvolution[i * convWidth + j];
+    }
+  }
+  // Top right corner
+  for (int i = convWidth / 2; i < convWidth; i++) {
+    for (int j = 0; j < convWidth / 2; j++) {
+      shiftedConvolution[(i - (convWidth / 2)) * dataHeight + (dataLength + j - convWidth / 2)] = originalConvolution[i * convWidth + j];
+    }
+  }
+  // Bottom left corner
+  for (int i = 0; i < convWidth / 2; i++) {
+    for (int j = convWidth / 2; j < convWidth; j++) {
+      shiftedConvolution[(dataHeight + i - convWidth / 2) * dataHeight + (j - convWidth / 2)] = originalConvolution[i * convWidth + j];
+    }
+  }
+  // Bottom right corner
+  for (int i = 0; i < (convWidth / 2); i++) {
+    for (int j = 0; j < (convWidth / 2); j++) {
+      shiftedConvolution[(dataHeight + i - convWidth / 2) * dataHeight + (dataLength + j - convWidth / 2)] = originalConvolution[i * convWidth + j];
+    }
+  }
+}
+
 // Updates the cells in a seperate thread, so as to keep the render updates fast
 void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
   long int startTime;
   long int elapsedTime;
-  double* distanceCoefficients = fftw_alloc_real(cells->height * cells->width);
+  double* distanceCoefficients = new double[SEARCH_RADIUS * SEARCH_RADIUS];
   int offsetLength = 0;
   double* stateArray = fftw_alloc_real(cells->height * cells->width);
   fftw_complex* stateArrayTransformed = fftw_alloc_complex(cells->height * cells->width);
   double* distanceArray = fftw_alloc_real(cells->height * cells->width);
-  for (int i = 0; i < cells->height * cells->width; i++) {
-    distanceCoefficients[i] = 0.0;
-  }
-  for (int i = 0; i < cells->height; i++) {
-    for (int j = 0; j < cells->width; j++) {
-      if (i == cells->height / 2 && j == cells->width / 2) continue;
-      double distance = (i - (double) cells->height / 2.0) * (i - (double) cells->height / 2.0) + (j - (double) cells->width / 2.0) * (j - (double) cells->width / 2.0);
-      distanceCoefficients [i * cells->height + j]= 1.0 / distance;
-      Cell currentCell = cells->cells[i * cells->height + j];
-      if (currentCell.type != CellType::RestingTissue) {
-        stateArray[i * cells->height + j] = currentCell.state;
-      }
-      else {
-        stateArray[i * cells->height + j] = 0.0;
-      }
+  for (int i = 0; i < SEARCH_RADIUS; i++) {
+    for (int j = 0; j < SEARCH_RADIUS; j++) {
+      if (i == SEARCH_RADIUS / 2 && j == SEARCH_RADIUS / 2) continue;
+      double distance = (i - (double) SEARCH_RADIUS / 2.0) * (i - (double) SEARCH_RADIUS / 2.0) + (j - (double) SEARCH_RADIUS / 2.0) * (j - (double) SEARCH_RADIUS / 2.0);
+      distanceCoefficients [i * SEARCH_RADIUS + j]= 1.0 / distance;
     }
   }
+  double* distanceCoefficientsPadded = fftw_alloc_real(cells->height * cells->width);
+  shiftConvolution(distanceCoefficients, distanceCoefficientsPadded, SEARCH_RADIUS, cells->height, cells->width);
+  delete[] distanceCoefficients;
   fftw_complex* distanceCoefficientsTransformed = fftw_alloc_complex(cells->height * cells->width);
-  fftw_plan distanceCoefficientsFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, distanceCoefficients, distanceCoefficientsTransformed, 0);
+  fftw_plan distanceCoefficientsFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, distanceCoefficientsPadded, distanceCoefficientsTransformed, 0);
   fftw_execute(distanceCoefficientsFFT);
   // The coeffients never change, and therefore only need to be transformed once
   fftw_destroy_plan(distanceCoefficientsFFT);
-  fftw_free(distanceCoefficients);
   fftw_plan stateArrayFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, stateArray, stateArrayTransformed, 0);
   fftw_plan stateArrayIFFT = fftw_plan_dft_c2r_2d(cells->height, cells->width, stateArrayTransformed, distanceArray, 0);
   while (!(*quit)) {
