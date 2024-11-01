@@ -46,12 +46,11 @@ void shiftConvolution(double* originalConvolution, double* shiftedConvolution, i
 }
 
 // Updates the cells in a seperate thread, so as to keep the render updates fast
-void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
+void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime, double* stateArray) {
   long int startTime;
   long int elapsedTime;
   double* distanceCoefficients = new double[SEARCH_RADIUS * SEARCH_RADIUS];
   int offsetLength = 0;
-  double* stateArray = fftw_alloc_real(cells->height * cells->width);
   fftw_complex* stateArrayTransformed = fftw_alloc_complex(cells->height * cells->width);
   double* distanceArray = fftw_alloc_real(cells->height * cells->width);
   for (int i = 0; i < SEARCH_RADIUS; i++) {
@@ -86,6 +85,13 @@ void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime) {
       std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
   }
+  // Cleanup
+  fftw_destroy_plan(stateArrayFFT);
+  fftw_destroy_plan(stateArrayIFFT);
+  fftw_free(distanceCoefficientsPadded);
+  fftw_free(distanceCoefficientsTransformed);
+  fftw_free(stateArrayTransformed);
+  fftw_free(distanceArray);
 }
 
 
@@ -124,7 +130,8 @@ int main (int argc, char *argv[]) {
   int mousePosX;
   int mousePosY;
   int frameTime = 500;
-  std::thread updateThread(updateCells, &cells, &quit, &paused, &frameTime);
+  double* stateArray = fftw_alloc_real(cells.height * cells.width);
+  std::thread updateThread(updateCells, &cells, &quit, &paused, &frameTime, stateArray);
   while (!quit) {
     while (SDL_PollEvent(&currentEvent) != 0) {
       if (currentEvent.type == SDL_QUIT) {
@@ -164,6 +171,17 @@ int main (int argc, char *argv[]) {
           delete[] cells.cells;
           cells = readCellsFromFile("cells.dmp");
           SDL_SetWindowSize(window, cells.width, cells.height);
+          for (int i = 0; i < cells.height; i++) {
+            for (int j = 0; j < cells.width; j++) {
+              Cell currentCell = cells.cells[i * cells.height + j];
+              if (currentCell.type == CellType::RestingTissue) {
+                stateArray[i * cells.height + j] = 0;
+              }
+              else {
+                stateArray[i * cells.height + j] = currentCell.state;
+              }
+            }
+          }
           lock.unlock();
         }
         else if (currentEvent.key.keysym.sym == SDLK_MINUS) {
@@ -213,6 +231,7 @@ int main (int argc, char *argv[]) {
     }
   }
   updateThread.join();
+  fftw_free(stateArray);
   SDL_DestroyWindow(window);
   SDL_Quit();
   return 0;
