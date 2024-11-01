@@ -46,7 +46,7 @@ void shiftConvolution(double* originalConvolution, double* shiftedConvolution, i
 }
 
 // Updates the cells in a seperate thread, so as to keep the render updates fast
-void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime, double* stateArray) {
+void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameTime, double* stateArray) {
   long int startTime;
   long int elapsedTime;
   double* distanceCoefficients = new double[SEARCH_RADIUS * SEARCH_RADIUS];
@@ -83,6 +83,10 @@ void updateCells(Cells* cells, bool* quit, bool* paused, int* frameTime, double*
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     while (*paused && !(*quit)) {
       std::this_thread::sleep_for(std::chrono::milliseconds(250));
+      if (*step) {
+        *step = false;
+        break;
+      }
     }
   }
   // Cleanup
@@ -123,6 +127,7 @@ int main (int argc, char *argv[]) {
   SDL_RenderPresent(renderer);
   bool quit = false;
   bool paused = false;
+  bool step = false;
   SDL_Event currentEvent;
   float xOffset = 0;
   float yOffset = 0;
@@ -131,7 +136,7 @@ int main (int argc, char *argv[]) {
   int mousePosY;
   int frameTime = 500;
   double* stateArray = fftw_alloc_real(cells.height * cells.width);
-  std::thread updateThread(updateCells, &cells, &quit, &paused, &frameTime, stateArray);
+  std::thread updateThread(updateCells, &cells, &quit, &paused, &step, &frameTime, stateArray);
   while (!quit) {
     while (SDL_PollEvent(&currentEvent) != 0) {
       if (currentEvent.type == SDL_QUIT) {
@@ -152,6 +157,9 @@ int main (int argc, char *argv[]) {
         }
         else if (currentEvent.key.keysym.sym == SDLK_SPACE) {
           paused = !paused;
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_PERIOD) {
+          step = true;
         }
         else if (currentEvent.key.keysym.sym == SDLK_EQUALS) {
           frameTime -= 50;
