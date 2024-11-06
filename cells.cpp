@@ -216,15 +216,17 @@ void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset
         cell.h = zoomFactor;
         SDL_RenderFillRectF(render, &cell);
       }
-      if (currentCell.state > 0 && currentCell.type != CellType::RestingTissue) {
-        if (currentCell.type == Pacemaker) {
-          SDL_SetRenderDrawColor(render, 255, 0, 255, 255);
+      else {
+        if (currentCell.state > 0 && currentCell.type != CellType::RestingTissue) {
+          if (currentCell.type == Pacemaker) {
+            SDL_SetRenderDrawColor(render, 255, 0, 255, 255);
+          }
+          cell.x = (j + xOffset) * zoomFactor;
+          cell.y = (i + yOffset) * zoomFactor;
+          cell.w = zoomFactor;
+          cell.h = zoomFactor;
+          SDL_RenderFillRectF(render, &cell);
         }
-        cell.x = (j + xOffset) * zoomFactor;
-        cell.y = (i + yOffset) * zoomFactor;
-        cell.w = zoomFactor;
-        cell.h = zoomFactor;
-        SDL_RenderFillRectF(render, &cell);
       }
     }
   }

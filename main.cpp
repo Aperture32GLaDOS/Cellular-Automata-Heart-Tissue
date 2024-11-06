@@ -165,8 +165,8 @@ int main (int argc, char *argv[]) {
         }
         else if (currentEvent.key.keysym.sym == SDLK_EQUALS) {
           frameTime -= 50;
-          if (frameTime == 0) {
-            frameTime = 50;
+          if (frameTime < 0) {
+            frameTime = 0;
           }
         }
         // Saves the current state to a file
