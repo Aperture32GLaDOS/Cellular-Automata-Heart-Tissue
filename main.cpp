@@ -22,25 +22,25 @@ void shiftConvolution(double* originalConvolution, double* shiftedConvolution, i
   //Top left corner (shifted so that the middle element of the convolution is now at (0, 0))
   for (int i = convWidth / 2; i < convWidth; i++) {
     for (int j = convWidth / 2; j < convWidth; j++) {
-      shiftedConvolution[(i - (convWidth / 2)) * dataHeight + (j - (convWidth / 2))] = originalConvolution[i * convWidth + j];
+      shiftedConvolution[(i - (convWidth / 2)) * dataLength + (j - (convWidth / 2))] = originalConvolution[i * convWidth + j];
     }
   }
   // Top right corner
   for (int i = convWidth / 2; i < convWidth; i++) {
     for (int j = 0; j < convWidth / 2; j++) {
-      shiftedConvolution[(i - (convWidth / 2)) * dataHeight + (dataLength + j - convWidth / 2)] = originalConvolution[i * convWidth + j];
+      shiftedConvolution[(i - (convWidth / 2)) * dataLength + (dataLength + j - convWidth / 2)] = originalConvolution[i * convWidth + j];
     }
   }
   // Bottom left corner
   for (int i = 0; i < convWidth / 2; i++) {
     for (int j = convWidth / 2; j < convWidth; j++) {
-      shiftedConvolution[(dataHeight + i - convWidth / 2) * dataHeight + (j - convWidth / 2)] = originalConvolution[i * convWidth + j];
+      shiftedConvolution[(dataHeight + i - convWidth / 2) * dataLength + (j - convWidth / 2)] = originalConvolution[i * convWidth + j];
     }
   }
   // Bottom right corner
   for (int i = 0; i < (convWidth / 2); i++) {
     for (int j = 0; j < (convWidth / 2); j++) {
-      shiftedConvolution[(dataHeight + i - convWidth / 2) * dataHeight + (dataLength + j - convWidth / 2)] = originalConvolution[i * convWidth + j];
+      shiftedConvolution[(dataHeight + i - convWidth / 2) * dataLength + (dataLength + j - convWidth / 2)] = originalConvolution[i * convWidth + j];
     }
   }
 }
@@ -49,27 +49,29 @@ void shiftConvolution(double* originalConvolution, double* shiftedConvolution, i
 void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameTime, double* stateArray) {
   long int startTime;
   long int elapsedTime;
+  double* distanceCoefficientsPadded = fftw_alloc_real(cells->height * cells->width);
+  // Complex arrays roughly half the size since FFTW takes advantage of complex conjugates
+  fftw_complex* distanceCoefficientsTransformed = fftw_alloc_complex(cells->height * (cells->width / 2 + 1));
+  fftw_complex* stateArrayTransformed = fftw_alloc_complex(cells->height * (cells->width / 2 + 1));
+  double* distanceArray = fftw_alloc_real(cells->height * cells->width);
+  // Plan FFTs before array initialization
+  fftw_plan distanceCoefficientsFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, distanceCoefficientsPadded, distanceCoefficientsTransformed, 0);
+  fftw_plan stateArrayFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, stateArray, stateArrayTransformed, 0);
+  fftw_plan stateArrayIFFT = fftw_plan_dft_c2r_2d(cells->height, cells->width, stateArrayTransformed, distanceArray, 0);
   double* distanceCoefficients = new double[SEARCH_RADIUS * SEARCH_RADIUS];
   int offsetLength = 0;
-  fftw_complex* stateArrayTransformed = fftw_alloc_complex(cells->height * cells->width);
-  double* distanceArray = fftw_alloc_real(cells->height * cells->width);
   for (int i = 0; i < SEARCH_RADIUS; i++) {
     for (int j = 0; j < SEARCH_RADIUS; j++) {
       if (i == SEARCH_RADIUS / 2 && j == SEARCH_RADIUS / 2) continue;
       double distance = (i - SEARCH_RADIUS / 2) * (i - SEARCH_RADIUS / 2) + (j - SEARCH_RADIUS / 2) * (j - SEARCH_RADIUS / 2);
-      distanceCoefficients [i * SEARCH_RADIUS + j]= 1.0 / distance;
+      distanceCoefficients[(i * SEARCH_RADIUS) + j] = 1.0 / distance;
     }
   }
-  double* distanceCoefficientsPadded = fftw_alloc_real(cells->height * cells->width);
-  shiftConvolution(distanceCoefficients, distanceCoefficientsPadded, SEARCH_RADIUS, cells->height, cells->width);
   delete[] distanceCoefficients;
-  fftw_complex* distanceCoefficientsTransformed = fftw_alloc_complex(cells->height * cells->width);
-  fftw_plan distanceCoefficientsFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, distanceCoefficientsPadded, distanceCoefficientsTransformed, 0);
+  shiftConvolution(distanceCoefficients, distanceCoefficientsPadded, SEARCH_RADIUS, cells->height, cells->width);
   fftw_execute(distanceCoefficientsFFT);
   // The coeffients never change, and therefore only need to be transformed once
   fftw_destroy_plan(distanceCoefficientsFFT);
-  fftw_plan stateArrayFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, stateArray, stateArrayTransformed, 0);
-  fftw_plan stateArrayIFFT = fftw_plan_dft_c2r_2d(cells->height, cells->width, stateArrayTransformed, distanceArray, 0);
   while (!(*quit)) {
     startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     // Lock the mutex, as data is being written
@@ -110,25 +112,27 @@ int main (int argc, char *argv[]) {
   cells.width = SIZE;
   cells.height = SIZE;
   cells.cells = new Cell[cells.height * cells.width];
+  // Initialize all cells to be inactive normal tissue
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
       Cell newCell;
       newCell.type = CellType::Tissue;
       newCell.state = 0;
-      cells.cells[i * cells.height + j] = newCell;
+      cells.cells[i * cells.width + j] = newCell;
     }
   }
   for (int i = -3; i <= 3; i++) {
     for (int j = -3; j <= 3; j++) {
-      cells.cells[(cells.height / 2 + i) * cells.height + (cells.width / 2 + j)].type = CellType::Pacemaker;
+      cells.cells[(cells.height / 2 + i) * cells.width + (cells.width / 2 + j)].type = CellType::Pacemaker;
     }
   }
+  cells.cells[(cells.height / 2) * cells.width + (cells.width / 2)].state = AP_DURATION;
   window = SDL_CreateWindow("Heart Tissue", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
       cells.width, cells.height, SDL_WINDOW_SHOWN);
   renderer = SDL_CreateRenderer(window, -1, 0);
   SDL_RenderPresent(renderer);
   bool quit = false;
-  bool paused = false;
+  bool paused = true;
   bool step = false;
   SDL_Event currentEvent;
   float xOffset = 0;
@@ -183,12 +187,12 @@ int main (int argc, char *argv[]) {
           SDL_SetWindowSize(window, cells.width, cells.height);
           for (int i = 0; i < cells.height; i++) {
             for (int j = 0; j < cells.width; j++) {
-              Cell currentCell = cells.cells[i * cells.height + j];
+              Cell currentCell = cells.cells[i * cells.width + j];
               if (currentCell.type == CellType::RestingTissue) {
-                stateArray[i * cells.height + j] = 0;
+                stateArray[i * cells.width + j] = 0;
               }
               else {
-                stateArray[i * cells.height + j] = currentCell.state;
+                stateArray[i * cells.width + j] = currentCell.state;
               }
             }
           }
@@ -234,17 +238,17 @@ int main (int argc, char *argv[]) {
       else if (currentEvent.type == SDL_MOUSEBUTTONDOWN) {
         SDL_GetMouseState(&mousePosX, &mousePosY);
         std::unique_lock<std::mutex> lock(mu);
-        Cell* selectedCell = &cells.cells[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.height + (int) ((mousePosX / zoomFactor) - xOffset)];
+        Cell* selectedCell = &cells.cells[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)];
         if (currentEvent.button.button == SDL_BUTTON_LEFT) {
           selectedCell->state = AP_DURATION;
           if (selectedCell->type != CellType::RestingTissue) {
-            stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.height + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+            stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
           }
         }
         else if (currentEvent.button.button == SDL_BUTTON_RIGHT) {
           if (selectedCell-> state != 0 && selectedCell->type != CellType::RestingTissue) selectedCell->state = 0;
           if (selectedCell->type != CellType::RestingTissue) {
-            stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.height + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+            stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
           }
         }
         // TODO: change tissue type on shift-right click (or similar)

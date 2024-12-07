@@ -30,7 +30,7 @@ unsigned char* serializeCells(Cells currentState) {
   // Serialize all the actual data
   for (int i = 0; i < currentState.height; i++) {
     for (int j = 0; j < currentState.width; j++) {
-      Cell currentCell = currentState.cells[i * currentState.height + j];
+      Cell currentCell = currentState.cells[i * currentState.width + j];
       // Serialize the cell type, followed by the state
       for (int k = 0; k < sizeof(CellType); k++) {
         serializedData[index] = (unsigned char) (currentCell.type >> (k * 8));
@@ -72,7 +72,7 @@ Cells readCells(unsigned char* serializedData) {
         currentCell.state = currentCell.state | (serializedData[index] << k * 8);
         index++;
       }
-      cells.cells[i * cells.height + j] = currentCell;
+      cells.cells[i * cells.width + j] = currentCell;
     }
   }
   return cells;
@@ -103,24 +103,32 @@ Cells readCellsFromFile(char* fileName) {
 void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double* stateArray, fftw_complex* stateArrayTransformed, double* distanceArray, fftw_plan stateArrayFFT, fftw_plan stateArrayIFFT) {
   std::vector<std::tuple<int, int>> cellsToChange;
   std::vector<Cell> newCells;
+  // Calculate the FFT of the stateArray
   fftw_execute(stateArrayFFT);
+  // Multiply the respective elements of stateArray and distanceCoefficients (distanceCoefficients is already transformed)
   for (int i = 0; i < currentState.height; i++) {
-    for (int j = 0; j < currentState.width; j++) {
+    // Only go up to about half the width, since beyond that is just complex conjugates
+    for (int j = 0; j < (currentState.width / 2 + 1); j++) {
       fftw_complex stateArrayElement = {0.0, 0.0};
       fftw_complex distanceCoefficient = {0.0, 0.0};
-      stateArrayElement[0] = stateArrayTransformed[i * currentState.height + j][0];
-      stateArrayElement[1] = stateArrayTransformed[i * currentState.height + j][1];
-      distanceCoefficient[0] = distanceCoefficients[i * currentState.height + j][0];
-      distanceCoefficient[1] = distanceCoefficients[i * currentState.height + j][1];
-      stateArrayTransformed[i * currentState.height + j][0] = (stateArrayElement[0] * distanceCoefficient[0] - stateArrayElement[1] * distanceCoefficient[1]) / (currentState.height * currentState.width);
-      stateArrayTransformed[i * currentState.height + j][1] = (stateArrayElement[0] * distanceCoefficient[1] + stateArrayElement[1] * distanceCoefficient[0]) / (currentState.height * currentState.width);
+      stateArrayElement[0] = stateArrayTransformed[i * (currentState.width / 2 + 1) + j][0];
+      stateArrayElement[1] = stateArrayTransformed[i * (currentState.width / 2 + 1) + j][1];
+      distanceCoefficient[0] = distanceCoefficients[i * (currentState.width / 2 + 1) + j][0];
+      distanceCoefficient[1] = distanceCoefficients[i * (currentState.width / 2 + 1) + j][1];
+      // Multiply the two complex numbers stateArrayElement and distanceCoefficient
+      // Note the constant division by the size of the array, for normalization purposes
+      stateArrayTransformed[i * (currentState.width / 2 + 1) + j][0] = (stateArrayElement[0] * distanceCoefficient[0] - stateArrayElement[1] * distanceCoefficient[1])
+        / (currentState.height * currentState.width);
+      stateArrayTransformed[i * (currentState.width / 2 + 1) + j][1] = (stateArrayElement[0] * distanceCoefficient[1] + stateArrayElement[1] * distanceCoefficient[0])
+        / (currentState.height * currentState.width);
     }
   }
+  // Take the inverse FFT to get the neighbor counts
   fftw_execute(stateArrayIFFT);
   for (int i = 0; i < currentState.height; i++) {
     for (int j = 0; j < currentState.width; j++) {
-      double neighborCount = distanceArray[i * currentState.height + j];
-      Cell currentCell = currentState.cells[i * currentState.height + j];
+      double neighborCount = distanceArray[i * currentState.width + j];
+      Cell currentCell = currentState.cells[i * currentState.width + j];
       Cell newCell;
       // Pacemaker cells are constantly in their action potential
       if (currentCell.type == CellType::Pacemaker) {
@@ -132,7 +140,7 @@ void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double
         else {
           newCell.state = currentCell.state - 1;
         }
-        stateArray[i * currentState.height + j] = newCell.state;
+        stateArray[i * currentState.width + j] = newCell.state;
         newCells.push_back(newCell);
       }
       // Resting tissue reactivates into normal tissue eventually
@@ -172,10 +180,10 @@ void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double
             newCell.state = currentCell.state - 1;
           }
           if (newCell.type == CellType::RestingTissue) {
-            stateArray[i * currentState.height + j] = 0;
+            stateArray[i * currentState.width + j] = 0;
           }
           else {
-            stateArray[i * currentState.height + j] = newCell.state;
+            stateArray[i * currentState.width + j] = newCell.state;
           }
           cellsToChange.push_back(std::make_tuple(i, j));
           newCells.push_back(newCell);
@@ -193,7 +201,7 @@ void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double
   // Set all changed states
   for (int i = 0; i < cellsToChange.size(); i++) {
     std::tuple<int, int> cellLocation = cellsToChange[i];
-    currentState.cells[std::get<0>(cellLocation) * currentState.height + std::get<1>(cellLocation)] = newCells[i];
+    currentState.cells[std::get<0>(cellLocation) * currentState.width + std::get<1>(cellLocation)] = newCells[i];
   }
 }
 
@@ -207,7 +215,7 @@ void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
       SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
-      Cell currentCell = cells.cells[i * cells.height + j];
+      Cell currentCell = cells.cells[i * cells.width + j];
       if (i == selectedCellI && j == selectedCellJ) {
         SDL_SetRenderDrawColor(render, 100, 100, 100, 255);
         cell.x = (j + xOffset) * zoomFactor;
