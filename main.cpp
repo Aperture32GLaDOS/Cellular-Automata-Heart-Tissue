@@ -68,8 +68,8 @@ void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameT
       distanceCoefficients[(i * SEARCH_RADIUS) + j] = 1.0 / distance;
     }
   }
-  delete[] distanceCoefficients;
   shiftConvolution(distanceCoefficients, distanceCoefficientsPadded, SEARCH_RADIUS, cells->height, cells->width);
+  delete[] distanceCoefficients;
   fftw_execute(distanceCoefficientsFFT);
   // The coeffients never change, and therefore only need to be transformed once
   fftw_destroy_plan(distanceCoefficientsFFT);
