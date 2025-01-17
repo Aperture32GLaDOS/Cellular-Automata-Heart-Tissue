@@ -77,7 +77,7 @@ void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameT
     startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     // Lock the mutex, as data is being written
     std::unique_lock<std::mutex> lock(mu);
-    advanceCells(*cells, distanceCoefficientsTransformed, stateArray, stateArrayTransformed, distanceArray, stateArrayFFT, stateArrayIFFT);
+    advanceCells(cells, distanceCoefficientsTransformed, stateArray, stateArrayTransformed, distanceArray, stateArrayFFT, stateArrayIFFT);
     lock.unlock();
     elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - startTime;
     if (elapsedTime <= *frameTime) {
@@ -89,7 +89,7 @@ void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameT
       if (*step) {
         *step = false;
         std::unique_lock<std::mutex> lock(mu);
-        advanceCells(*cells, distanceCoefficientsTransformed, stateArray, stateArrayTransformed, distanceArray, stateArrayFFT, stateArrayIFFT);
+        advanceCells(cells, distanceCoefficientsTransformed, stateArray, stateArrayTransformed, distanceArray, stateArrayFFT, stateArrayIFFT);
         lock.unlock();
       }
     }
@@ -268,6 +268,7 @@ int main (int argc, char *argv[]) {
     }
   }
   updateThread.join();
+  delete[] cells.cells;
   fftw_free(stateArray);
   SDL_DestroyWindow(window);
   SDL_Quit();

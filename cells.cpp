@@ -100,6 +100,7 @@ void saveCellsToFile(Cells cells, char* fileName) {
   outputStream.open(fileName);
   outputStream.write((char*) data, getSizeOfData(cells));
   outputStream.close();
+  delete[] data;
 }
 
 Cells readCellsFromFile(char* fileName) {
@@ -116,39 +117,36 @@ Cells readCellsFromFile(char* fileName) {
   return output;
 }
 
-void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double* stateArray, fftw_complex* stateArrayTransformed, double* distanceArray, fftw_plan stateArrayFFT, fftw_plan stateArrayIFFT) {
-  std::vector<std::tuple<int, int>> cellsToChange;
-  std::vector<Cell> newCells;
+void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, double* stateArray, fftw_complex* stateArrayTransformed, double* distanceArray, fftw_plan stateArrayFFT, fftw_plan stateArrayIFFT) {
   // Calculate the FFT of the stateArray
   fftw_execute(stateArrayFFT);
   // Multiply the respective elements of stateArray and distanceCoefficients (distanceCoefficients is already transformed)
-  for (int i = 0; i < currentState.height; i++) {
+  for (int i = 0; i < currentState->height; i++) {
     // Only go up to about half the width, since beyond that is just complex conjugates
-    for (int j = 0; j < (currentState.width / 2 + 1); j++) {
+    for (int j = 0; j < (currentState->width / 2 + 1); j++) {
       fftw_complex stateArrayElement = {0.0, 0.0};
       fftw_complex distanceCoefficient = {0.0, 0.0};
-      stateArrayElement[0] = stateArrayTransformed[i * (currentState.width / 2 + 1) + j][0];
-      stateArrayElement[1] = stateArrayTransformed[i * (currentState.width / 2 + 1) + j][1];
-      distanceCoefficient[0] = distanceCoefficients[i * (currentState.width / 2 + 1) + j][0];
-      distanceCoefficient[1] = distanceCoefficients[i * (currentState.width / 2 + 1) + j][1];
+      stateArrayElement[0] = stateArrayTransformed[i * (currentState->width / 2 + 1) + j][0];
+      stateArrayElement[1] = stateArrayTransformed[i * (currentState->width / 2 + 1) + j][1];
+      distanceCoefficient[0] = distanceCoefficients[i * (currentState->width / 2 + 1) + j][0];
+      distanceCoefficient[1] = distanceCoefficients[i * (currentState->width / 2 + 1) + j][1];
       // Multiply the two complex numbers stateArrayElement and distanceCoefficient
       // Note the constant division by the size of the array, for normalization purposes
-      stateArrayTransformed[i * (currentState.width / 2 + 1) + j][0] = (stateArrayElement[0] * distanceCoefficient[0] - stateArrayElement[1] * distanceCoefficient[1])
-        / (currentState.height * currentState.width);
-      stateArrayTransformed[i * (currentState.width / 2 + 1) + j][1] = (stateArrayElement[0] * distanceCoefficient[1] + stateArrayElement[1] * distanceCoefficient[0])
-        / (currentState.height * currentState.width);
+      stateArrayTransformed[i * (currentState->width / 2 + 1) + j][0] = (stateArrayElement[0] * distanceCoefficient[0] - stateArrayElement[1] * distanceCoefficient[1])
+        / (currentState->height * currentState->width);
+      stateArrayTransformed[i * (currentState->width / 2 + 1) + j][1] = (stateArrayElement[0] * distanceCoefficient[1] + stateArrayElement[1] * distanceCoefficient[0])
+        / (currentState->height * currentState->width);
     }
   }
   // Take the inverse FFT to get the neighbor counts
   fftw_execute(stateArrayIFFT);
-  for (int i = 0; i < currentState.height; i++) {
-    for (int j = 0; j < currentState.width; j++) {
-      double neighborCount = distanceArray[i * currentState.width + j];
-      Cell currentCell = currentState.cells[i * currentState.width + j];
-      Cell newCell;
+  for (int i = 0; i < currentState->height; i++) {
+    for (int j = 0; j < currentState->width; j++) {
+      double neighborCount = distanceArray[i * currentState->width + j];
+      Cell currentCell = currentState->cells[i * currentState->width + j];
+      Cell newCell = currentCell;
       // Pacemaker cells are constantly in their action potential
       if (currentCell.type == CellType::Pacemaker) {
-        cellsToChange.push_back(std::make_tuple(i, j));
         newCell.type = CellType::Pacemaker;
         if (currentCell.state == 0) {
           newCell.state = AP_DURATION;
@@ -156,12 +154,10 @@ void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double
         else {
           newCell.state = currentCell.state - 1;
         }
-        stateArray[i * currentState.width + j] = newCell.state;
-        newCells.push_back(newCell);
+        stateArray[i * currentState->width + j] = newCell.state;
       }
       // Resting tissue reactivates into normal tissue eventually
       else if (currentCell.type == CellType::RestingTissue) {
-        cellsToChange.push_back(std::make_tuple(i, j));
         if (currentCell.state == 1) {
           newCell.type = CellType::Tissue;
           newCell.state = 0;
@@ -170,7 +166,6 @@ void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double
           newCell.type = CellType::RestingTissue;
           newCell.state = currentCell.state - 1;
         }
-        newCells.push_back(newCell);
       }
       // If condition here so that more enum variants may be added
       else if (currentCell.type == CellType::Tissue) {
@@ -182,7 +177,6 @@ void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double
           doChange = neighborCount >= AP_THRESHOLD;
         }
         if (doChange) {
-          Cell newCell;
           if (currentCell.state == 0) {
             newCell.type = CellType::Tissue;
             newCell.state = AP_DURATION;
@@ -196,28 +190,15 @@ void advanceCells(Cells currentState, fftw_complex* distanceCoefficients, double
             newCell.state = currentCell.state - 1;
           }
           if (newCell.type == CellType::RestingTissue) {
-            stateArray[i * currentState.width + j] = 0;
+            stateArray[i * currentState->width + j] = 0;
           }
           else {
-            stateArray[i * currentState.width + j] = newCell.state;
+            stateArray[i * currentState->width + j] = newCell.state;
           }
-          cellsToChange.push_back(std::make_tuple(i, j));
-          newCells.push_back(newCell);
         }
       }
-      if (false) {
-        // Push the location of the cell and its new state
-        cellsToChange.push_back(std::make_tuple(i, j));
-        Cell newCell;
-        newCells.push_back(newCell);
-      }
+      currentState->cells[i * currentState->width + j] = newCell;
     }
-  }
-
-  // Set all changed states
-  for (int i = 0; i < cellsToChange.size(); i++) {
-    std::tuple<int, int> cellLocation = cellsToChange[i];
-    currentState.cells[std::get<0>(cellLocation) * currentState.width + std::get<1>(cellLocation)] = newCells[i];
   }
 }
 
@@ -228,21 +209,15 @@ void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset
   SDL_RenderClear(render);
   SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
   SDL_FRect cell;
-  Cell selectedCell = cells.cells[selectedCellI * cells.width + selectedCellJ];
-  // TODO: automatic file location OR have a font folder in the project
-  TTF_Font* font = TTF_OpenFont("/usr/share/fonts/Ubuntu.ttf", 32);
-  SDL_Color textColor = {255, 255, 255, 255};
-  char* message = new char[100];
-  snprintf(message, 100, "Cell type: %s  Cell state: %d", cellTypeToString(selectedCell.type), selectedCell.state);
-  SDL_Surface* textSurface = TTF_RenderText_Solid(font, message, textColor);
-  delete[] message;
-  SDL_Texture* textTexture = SDL_CreateTextureFromSurface(render, textSurface);
-  SDL_Rect textRect = {SIZE - textSurface->w, 0, textSurface->w, textSurface->h};
+  bool hasSelectedCell = false;
+  Cell selectedCell;
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
       SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
       Cell currentCell = cells.cells[i * cells.width + j];
       if (i == selectedCellI && j == selectedCellJ) {
+        selectedCell = cells.cells[selectedCellI * cells.width + selectedCellJ];
+        hasSelectedCell = true;
         SDL_SetRenderDrawColor(render, 100, 100, 100, 255);
         cell.x = (j + xOffset) * zoomFactor;
         cell.y = (i + yOffset) * zoomFactor;
@@ -264,7 +239,18 @@ void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset
       }
     }
   }
-  SDL_RenderCopy(render, textTexture, NULL, &textRect);
+  if (hasSelectedCell) {
+    // TODO: automatic file location OR have a font folder in the project
+    TTF_Font* font = TTF_OpenFont("/usr/share/fonts/Ubuntu.ttf", 32);
+    SDL_Color textColor = {255, 255, 255, 255};
+    char* message = new char[100];
+    snprintf(message, 100, "Cell type: %s  Cell state: %d", cellTypeToString(selectedCell.type), selectedCell.state);
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, message, textColor);
+    delete[] message;
+    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(render, textSurface);
+    SDL_Rect textRect = {SIZE - textSurface->w, 0, textSurface->w, textSurface->h};
+    SDL_RenderCopy(render, textTexture, NULL, &textRect);
+  }
   SDL_RenderPresent(render);
 }
 
