@@ -5,6 +5,7 @@
 #include <SDL2/SDL_mouse.h>
 #include <SDL2/SDL_syswm.h>
 #include <SDL2/SDL_video.h>
+#include <SDL2/SDL_ttf.h>
 #include <chrono>
 #include <cstdlib>
 #include <fftw3.h>
@@ -104,7 +105,7 @@ void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameT
 
 
 int main (int argc, char *argv[]) {
-  if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+  if (SDL_Init(SDL_INIT_VIDEO) < 0 || TTF_Init() < 0) {
     return 0;
   }
   // Declare the 2D plane of cells

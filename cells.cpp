@@ -1,4 +1,9 @@
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_pixels.h>
 #include <SDL2/SDL_rect.h>
+#include <SDL2/SDL_render.h>
+#include <SDL2/SDL_surface.h>
+#include <SDL2/SDL_ttf.h>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -12,6 +17,17 @@
 
 uint getSizeOfData(Cells data) {
   return sizeof(uint) * 2 + sizeof(Cell) * data.height * data.width;
+}
+
+const char* cellTypeToString(CellType type) {
+  switch (type) {
+    case CellType::Tissue:
+      return "Normal Cell";
+    case CellType::Pacemaker:
+      return "Pacemaker Cell";
+    case CellType::RestingTissue:
+      return "Resting Cell";
+  }
 }
 
 unsigned char* serializeCells(Cells currentState) {
@@ -212,6 +228,16 @@ void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset
   SDL_RenderClear(render);
   SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
   SDL_FRect cell;
+  Cell selectedCell = cells.cells[selectedCellI * cells.width + selectedCellJ];
+  // TODO: automatic file location OR have a font folder in the project
+  TTF_Font* font = TTF_OpenFont("/usr/share/fonts/Ubuntu.ttf", 32);
+  SDL_Color textColor = {255, 255, 255, 255};
+  char* message = new char[100];
+  snprintf(message, 100, "Cell type: %s  Cell state: %d", cellTypeToString(selectedCell.type), selectedCell.state);
+  SDL_Surface* textSurface = TTF_RenderText_Solid(font, message, textColor);
+  delete[] message;
+  SDL_Texture* textTexture = SDL_CreateTextureFromSurface(render, textSurface);
+  SDL_Rect textRect = {SIZE - textSurface->w, 0, textSurface->w, textSurface->h};
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
       SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
@@ -238,6 +264,7 @@ void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset
       }
     }
   }
+  SDL_RenderCopy(render, textTexture, NULL, &textRect);
   SDL_RenderPresent(render);
 }
 
