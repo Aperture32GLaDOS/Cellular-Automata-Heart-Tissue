@@ -4,6 +4,7 @@
 #include <SDL2/SDL_render.h>
 #include <SDL2/SDL_surface.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_error.h>
 #include <complex>
 #include <cstddef>
 #include <cstdio>
@@ -219,7 +220,7 @@ void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, doubl
 }
 
 // Renders the cells at a (currently) 1-1 ratio of cells to pixels
-void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset, float zoomFactor, int selectedCellI, int selectedCellJ) {
+void renderCells(Cells cells, SDL_Renderer* render, TTF_Font* font, float xOffset, float yOffset, float zoomFactor, int selectedCellI, int selectedCellJ) {
   // TODO: render different colours depending on cell state
   SDL_SetRenderDrawColor(render, 0, 0, 0, 0);
   SDL_RenderClear(render);
@@ -232,7 +233,7 @@ void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset
       SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
       Cell currentCell = cells.cells[i * cells.width + j];
       if (i == selectedCellI && j == selectedCellJ) {
-        selectedCell = cells.cells[selectedCellI * cells.width + selectedCellJ];
+        selectedCell = currentCell;
         hasSelectedCell = true;
         SDL_SetRenderDrawColor(render, 100, 100, 100, 255);
         cell.x = (j + xOffset) * zoomFactor;
@@ -257,15 +258,19 @@ void renderCells(Cells cells, SDL_Renderer* render, float xOffset, float yOffset
   }
   if (hasSelectedCell) {
     // TODO: automatic file location OR have a font folder in the project
-    TTF_Font* font = TTF_OpenFont("/usr/share/fonts/Ubuntu.ttf", 32);
     SDL_Color textColor = {255, 255, 255, 255};
     char* message = new char[100];
     snprintf(message, 100, "Cell type: %s  Cell state: %d", cellTypeToString(selectedCell.type), selectedCell.state);
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, message, textColor);
+    if (textSurface == NULL) {
+      std::cout << SDL_GetError() << std::endl;
+    }
+    else {
+      SDL_Texture* textTexture = SDL_CreateTextureFromSurface(render, textSurface);
+      SDL_Rect textRect = {SIZE - textSurface->w, 0, textSurface->w, textSurface->h};
+      SDL_RenderCopy(render, textTexture, NULL, &textRect);
+    }
     delete[] message;
-    SDL_Texture* textTexture = SDL_CreateTextureFromSurface(render, textSurface);
-    SDL_Rect textRect = {SIZE - textSurface->w, 0, textSurface->w, textSurface->h};
-    SDL_RenderCopy(render, textTexture, NULL, &textRect);
   }
   SDL_RenderPresent(render);
 }

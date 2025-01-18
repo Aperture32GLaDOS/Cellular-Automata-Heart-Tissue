@@ -131,6 +131,8 @@ int main (int argc, char *argv[]) {
   window = SDL_CreateWindow("Heart Tissue", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
       cells.width, cells.height, SDL_WINDOW_SHOWN);
   renderer = SDL_CreateRenderer(window, -1, 0);
+  // TODO: automatic file location OR have a font folder in the project
+  TTF_Font* font = TTF_OpenFont("/usr/share/fonts/Ubuntu.ttf", 32);
   SDL_RenderPresent(renderer);
   bool quit = false;
   bool paused = true;
@@ -257,7 +259,7 @@ int main (int argc, char *argv[]) {
       }
     }
     std::unique_lock<std::mutex> lock(mu);
-    renderCells(cells, renderer, xOffset, yOffset, zoomFactor, ((int) ((mousePosY / zoomFactor) - yOffset)), (int) ((mousePosX / zoomFactor) - xOffset));
+    renderCells(cells, renderer, font, xOffset, yOffset, zoomFactor, ((int) ((mousePosY / zoomFactor) - yOffset)), (int) ((mousePosX / zoomFactor) - xOffset));
     lock.unlock();
     // Use fewer CPU cycles if paused
     if (paused) {
@@ -270,6 +272,7 @@ int main (int argc, char *argv[]) {
   updateThread.join();
   delete[] cells.cells;
   fftw_free(stateArray);
+  TTF_CloseFont(font);
   SDL_DestroyWindow(window);
   SDL_Quit();
   return 0;
