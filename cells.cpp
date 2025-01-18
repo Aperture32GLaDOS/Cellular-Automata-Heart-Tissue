@@ -4,14 +4,15 @@
 #include <SDL2/SDL_render.h>
 #include <SDL2/SDL_surface.h>
 #include <SDL2/SDL_ttf.h>
+#include <complex>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
 #include <fstream>
+#include <immintrin.h>
 #include <iostream>
-#include <tuple>
-#include <vector>
+#include <x86intrin.h>
 #include <fftw3.h>
 #include "cells.h"
 
@@ -121,25 +122,28 @@ void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, doubl
   // Calculate the FFT of the stateArray
   fftw_execute(stateArrayFFT);
   // Multiply the respective elements of stateArray and distanceCoefficients (distanceCoefficients is already transformed)
-  for (int i = 0; i < currentState->height; i++) {
-    // Only go up to about half the width, since beyond that is just complex conjugates
-    for (int j = 0; j < (currentState->width / 2 + 1); j++) {
-      fftw_complex stateArrayElement = {0.0, 0.0};
-      fftw_complex distanceCoefficient = {0.0, 0.0};
-      stateArrayElement[0] = stateArrayTransformed[i * (currentState->width / 2 + 1) + j][0];
-      stateArrayElement[1] = stateArrayTransformed[i * (currentState->width / 2 + 1) + j][1];
-      distanceCoefficient[0] = distanceCoefficients[i * (currentState->width / 2 + 1) + j][0];
-      distanceCoefficient[1] = distanceCoefficients[i * (currentState->width / 2 + 1) + j][1];
-      // Multiply the two complex numbers stateArrayElement and distanceCoefficient
-      // Note the constant division by the size of the array, for normalization purposes
-      stateArrayTransformed[i * (currentState->width / 2 + 1) + j][0] = (stateArrayElement[0] * distanceCoefficient[0] - stateArrayElement[1] * distanceCoefficient[1])
-        / (currentState->height * currentState->width);
-      stateArrayTransformed[i * (currentState->width / 2 + 1) + j][1] = (stateArrayElement[0] * distanceCoefficient[1] + stateArrayElement[1] * distanceCoefficient[0])
-        / (currentState->height * currentState->width);
+  // We use AVX intrinsics here for a ~4x speedup
+  for (int i = 0; i < currentState->height * (currentState->width / 2 + 1); i += 4) {
+    __m256d normalizationFactor = _mm256_set1_pd(currentState->height * currentState->width);
+    __m256d realStateArray = _mm256_set_pd(stateArrayTransformed[i + 3][0], stateArrayTransformed[i + 2][0], stateArrayTransformed[i + 1][0], stateArrayTransformed[i][0]);
+    __m256d imagStateArray = _mm256_set_pd(stateArrayTransformed[i + 3][1], stateArrayTransformed[i + 2][1], stateArrayTransformed[i + 1][1], stateArrayTransformed[i][1]);
+    __m256d realDistanceCoefficient = _mm256_set_pd(distanceCoefficients[i + 3][0], distanceCoefficients[i + 2][0], distanceCoefficients[i + 1][0], distanceCoefficients[i][0]);
+    __m256d imagDistanceCoefficient = _mm256_set_pd(distanceCoefficients[i + 3][1], distanceCoefficients[i + 2][1], distanceCoefficients[i + 1][1], distanceCoefficients[i][1]);
+    __m256d realResult = _mm256_sub_pd(_mm256_mul_pd(realStateArray, realDistanceCoefficient), _mm256_mul_pd(imagStateArray, imagDistanceCoefficient));
+    __m256d imagResult = _mm256_add_pd(_mm256_mul_pd(realStateArray, imagDistanceCoefficient), _mm256_mul_pd(imagStateArray, realDistanceCoefficient));
+    realResult = _mm256_div_pd(realResult, normalizationFactor);
+    imagResult = _mm256_div_pd(imagResult, normalizationFactor);
+    double real[4];
+    double imag[4];
+    _mm256_storeu_pd(real, realResult);
+    _mm256_storeu_pd(imag, imagResult);
+    for (int j = 0; j < 4; j++) {
+      stateArrayTransformed[i + j][0] = real[j];
+      stateArrayTransformed[i + j][1] = imag[j];
     }
   }
-  // Take the inverse FFT to get the neighbor counts
   fftw_execute(stateArrayIFFT);
+  // TODO: multithread this loop
   for (int i = 0; i < currentState->height; i++) {
     for (int j = 0; j < currentState->width; j++) {
       double neighborCount = distanceArray[i * currentState->width + j];

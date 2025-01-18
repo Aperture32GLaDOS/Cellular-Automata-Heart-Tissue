@@ -3,9 +3,9 @@
 #include <SDL2/SDL_render.h>
 #define SIZE 1024
 #define SEARCH_RADIUS 64
-#define AP_DURATION 64
+#define AP_DURATION 32
 #define REST_DURATION 8
-#define AP_THRESHOLD 32
+#define AP_THRESHOLD 16
 
 enum CellType{
   // A heart cell here is represented either as a pacemaker cell, or a normal tissue cell
@@ -28,6 +28,8 @@ struct Cells {
   // (indexed [i][j] would be [i * height + j])
   Cell* cells;
 };
+
+const char* cellTypeToString(CellType type);
 
 void advanceCells(Cells currentState, int* searchOffsets, int offsetLength);
 
