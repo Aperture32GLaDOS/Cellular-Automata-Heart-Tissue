@@ -12,6 +12,7 @@
 #include <fstream>
 #include <immintrin.h>
 #include <iostream>
+#include <thread>
 #include <x86intrin.h>
 #include <fftw3.h>
 #include "cells.h"
@@ -118,34 +119,9 @@ Cells readCellsFromFile(char* fileName) {
   return output;
 }
 
-void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, double* stateArray, fftw_complex* stateArrayTransformed, double* distanceArray, fftw_plan stateArrayFFT, fftw_plan stateArrayIFFT) {
-  // Calculate the FFT of the stateArray
-  fftw_execute(stateArrayFFT);
-  // Multiply the respective elements of stateArray and distanceCoefficients (distanceCoefficients is already transformed)
-  // We use AVX intrinsics here for a ~4x speedup
-  for (int i = 0; i < currentState->height * (currentState->width / 2 + 1); i += 4) {
-    __m256d normalizationFactor = _mm256_set1_pd(currentState->height * currentState->width);
-    __m256d realStateArray = _mm256_set_pd(stateArrayTransformed[i + 3][0], stateArrayTransformed[i + 2][0], stateArrayTransformed[i + 1][0], stateArrayTransformed[i][0]);
-    __m256d imagStateArray = _mm256_set_pd(stateArrayTransformed[i + 3][1], stateArrayTransformed[i + 2][1], stateArrayTransformed[i + 1][1], stateArrayTransformed[i][1]);
-    __m256d realDistanceCoefficient = _mm256_set_pd(distanceCoefficients[i + 3][0], distanceCoefficients[i + 2][0], distanceCoefficients[i + 1][0], distanceCoefficients[i][0]);
-    __m256d imagDistanceCoefficient = _mm256_set_pd(distanceCoefficients[i + 3][1], distanceCoefficients[i + 2][1], distanceCoefficients[i + 1][1], distanceCoefficients[i][1]);
-    __m256d realResult = _mm256_sub_pd(_mm256_mul_pd(realStateArray, realDistanceCoefficient), _mm256_mul_pd(imagStateArray, imagDistanceCoefficient));
-    __m256d imagResult = _mm256_add_pd(_mm256_mul_pd(realStateArray, imagDistanceCoefficient), _mm256_mul_pd(imagStateArray, realDistanceCoefficient));
-    realResult = _mm256_div_pd(realResult, normalizationFactor);
-    imagResult = _mm256_div_pd(imagResult, normalizationFactor);
-    double real[4];
-    double imag[4];
-    _mm256_storeu_pd(real, realResult);
-    _mm256_storeu_pd(imag, imagResult);
-    for (int j = 0; j < 4; j++) {
-      stateArrayTransformed[i + j][0] = real[j];
-      stateArrayTransformed[i + j][1] = imag[j];
-    }
-  }
-  fftw_execute(stateArrayIFFT);
-  // TODO: multithread this loop
-  for (int i = 0; i < currentState->height; i++) {
-    for (int j = 0; j < currentState->width; j++) {
+void updateCellsArea(Cells* currentState, double* distanceArray, double* stateArray, int startHeight, int endHeight, int startWidth, int endWidth) {
+  for (int i = startHeight; i < endHeight; i++) {
+    for (int j = startWidth; j < endWidth; j++) {
       double neighborCount = distanceArray[i * currentState->width + j];
       Cell currentCell = currentState->cells[i * currentState->width + j];
       Cell newCell = currentCell;
@@ -203,6 +179,42 @@ void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, doubl
       }
       currentState->cells[i * currentState->width + j] = newCell;
     }
+  }
+}
+
+void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, double* stateArray, fftw_complex* stateArrayTransformed, double* distanceArray, fftw_plan stateArrayFFT, fftw_plan stateArrayIFFT) {
+  // Calculate the FFT of the stateArray
+  fftw_execute(stateArrayFFT);
+  // Multiply the respective elements of stateArray and distanceCoefficients (distanceCoefficients is already transformed)
+  // We use AVX intrinsics here for a ~4x speedup
+  for (int i = 0; i < currentState->height * (currentState->width / 2 + 1); i += 4) {
+    __m256d normalizationFactor = _mm256_set1_pd(currentState->height * currentState->width);
+    __m256d realStateArray = _mm256_set_pd(stateArrayTransformed[i + 3][0], stateArrayTransformed[i + 2][0], stateArrayTransformed[i + 1][0], stateArrayTransformed[i][0]);
+    __m256d imagStateArray = _mm256_set_pd(stateArrayTransformed[i + 3][1], stateArrayTransformed[i + 2][1], stateArrayTransformed[i + 1][1], stateArrayTransformed[i][1]);
+    __m256d realDistanceCoefficient = _mm256_set_pd(distanceCoefficients[i + 3][0], distanceCoefficients[i + 2][0], distanceCoefficients[i + 1][0], distanceCoefficients[i][0]);
+    __m256d imagDistanceCoefficient = _mm256_set_pd(distanceCoefficients[i + 3][1], distanceCoefficients[i + 2][1], distanceCoefficients[i + 1][1], distanceCoefficients[i][1]);
+    __m256d realResult = _mm256_sub_pd(_mm256_mul_pd(realStateArray, realDistanceCoefficient), _mm256_mul_pd(imagStateArray, imagDistanceCoefficient));
+    __m256d imagResult = _mm256_add_pd(_mm256_mul_pd(realStateArray, imagDistanceCoefficient), _mm256_mul_pd(imagStateArray, realDistanceCoefficient));
+    realResult = _mm256_div_pd(realResult, normalizationFactor);
+    imagResult = _mm256_div_pd(imagResult, normalizationFactor);
+    double real[4];
+    double imag[4];
+    _mm256_storeu_pd(real, realResult);
+    _mm256_storeu_pd(imag, imagResult);
+    for (int j = 0; j < 4; j++) {
+      stateArrayTransformed[i + j][0] = real[j];
+      stateArrayTransformed[i + j][1] = imag[j];
+    }
+  }
+  fftw_execute(stateArrayIFFT);
+  // Safe to thread here as mutex is locked when this function is called
+  std::thread threads[8];
+  int deltaHeight = currentState->height / 8;
+  for (int i = 0; i < 8; i++) {
+    threads[i] = std::thread(updateCellsArea, currentState, distanceArray, stateArray, deltaHeight * i, deltaHeight * (i + 1), 0, currentState -> width);
+  }
+  for (int i = 0; i < 8; i++) {
+    threads[i].join();
   }
 }
 
