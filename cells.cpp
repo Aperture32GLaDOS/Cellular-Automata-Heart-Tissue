@@ -120,67 +120,113 @@ Cells readCellsFromFile(char* fileName) {
   return output;
 }
 
-void updateCellsArea(Cells* currentState, double* distanceArray, double* stateArray, int startHeight, int endHeight, int startWidth, int endWidth) {
-  for (int i = startHeight; i < endHeight; i++) {
-    for (int j = startWidth; j < endWidth; j++) {
-      double neighborCount = distanceArray[i * currentState->width + j];
-      Cell currentCell = currentState->cells[i * currentState->width + j];
-      Cell newCell = currentCell;
-      // Pacemaker cells are constantly in their action potential
-      if (currentCell.type == CellType::Pacemaker) {
-        newCell.type = CellType::Pacemaker;
-        if (currentCell.state == 0) {
-          newCell.state = AP_DURATION;
-        }
-        else {
-          newCell.state = currentCell.state - 1;
-        }
-        stateArray[i * currentState->width + j] = newCell.state;
-      }
-      // Resting tissue reactivates into normal tissue eventually
-      else if (currentCell.type == CellType::RestingTissue) {
-        if (currentCell.state == 1) {
-          newCell.type = CellType::Tissue;
-          newCell.state = 0;
-        }
-        else {
-          newCell.type = CellType::RestingTissue;
-          newCell.state = currentCell.state - 1;
-        }
-      }
-      // If condition here so that more enum variants may be added
-      else if (currentCell.type == CellType::Tissue) {
-        bool doChange = true;
-        // Only search if the cell is not excited
-        if (currentCell.state == 0) {
-          doChange = false;
-          // Search in a radius around the current cell
-          doChange = neighborCount >= AP_THRESHOLD;
-        }
-        if (doChange) {
-          if (currentCell.state == 0) {
-            newCell.type = CellType::Tissue;
-            newCell.state = AP_DURATION;
-          }
-          else if (currentCell.state == 1) {
-            newCell.type = CellType::RestingTissue;
-            newCell.state = REST_DURATION;
-          }
-          else {
-            newCell.type = CellType::Tissue;
-            newCell.state = currentCell.state - 1;
-          }
-          if (newCell.type == CellType::RestingTissue) {
-            stateArray[i * currentState->width + j] = 0;
-          }
-          else {
-            stateArray[i * currentState->width + j] = newCell.state;
-          }
-        }
-      }
-      currentState->cells[i * currentState->width + j] = newCell;
+void updateCellsArea(Cells* currentState, double* distanceArray, double* stateArray, int start, int end) {
+  int pacemaker = 0;
+  int tissue = 1;
+  int restingTissue = 2;
+  __m256i pacemakerAVX = _mm256_set1_epi32(pacemaker);
+  __m256i tissueAVX = _mm256_set1_epi32(tissue);
+  __m256i restingTissueAVX = _mm256_set1_epi32(restingTissue);
+  __m256d firstHalfNeighbours;
+  __m256d secondHalfNeighbours;
+  __m128 firstHalfNeighboursSingle;
+  __m128 secondHalfNeighboursSingle;
+  __m256 neighbours;
+  __m256i neighboursRounded;
+  __m256i cellStates;
+  __m256i cellTypes;
+  __m256i stateArrayAVX;
+  __m256i isPacemaker;
+  __m256i isTissue;
+  __m256i isResting;
+  __m256i wasActive;
+  __m256i isZeroState;
+  __m256i isAboveThreshold;
+  __m256i negativeBitAVX = _mm256_set1_epi32(1 << 31);
+  __m256 floatNegativeBitAVX = *((__m256*) &negativeBitAVX);
+  __m256i zeroAVX = _mm256_set1_epi32(0);
+  __m256i oneAVX = _mm256_set1_epi32(1);
+  __m256i allOneBitsAVX = _mm256_sub_epi32(zeroAVX, oneAVX);
+  __m256i restingDurationAVX = _mm256_set1_epi32(REST_DURATION);
+  __m256i maxStateAVX = _mm256_set1_epi32(AP_DURATION);
+  __m256 thresholdAVX = _mm256_set1_ps(AP_THRESHOLD);
+  __m256i restingToNormal = _mm256_sub_epi32(tissueAVX, restingTissueAVX);
+  __m256i normalToResting = _mm256_sub_epi32(restingTissueAVX, tissueAVX);
+  int* cellStatesUpdated = new int[8];
+  int* cellTypesUpdatedInt = new int[8];
+  int* stateArrayUpdated = new int[8];
+  CellType* cellTypesUpdated = (CellType*) cellTypesUpdatedInt;
+  for (int i = start; i < end; i+=8) {
+    // Convert neighbourhood counts to single-precision, so 8 of them can be stored at once
+    firstHalfNeighbours = _mm256_set_pd(distanceArray[(i + 3)], distanceArray[(i + 2)], distanceArray[(i + 1)], distanceArray[i]);
+    secondHalfNeighbours = _mm256_set_pd(distanceArray[(i + 7)], distanceArray[(i + 6)], distanceArray[(i + 5)], distanceArray[(i + 4)]);
+    firstHalfNeighboursSingle = _mm256_cvtpd_ps(firstHalfNeighbours);
+    secondHalfNeighboursSingle = _mm256_cvtpd_ps(secondHalfNeighbours);
+    neighbours = _mm256_castps128_ps256(firstHalfNeighboursSingle);
+    neighbours = _mm256_insertf128_ps(neighbours, secondHalfNeighboursSingle, 1);
+    neighbours = _mm256_sub_ps(neighbours, thresholdAVX);
+    neighbours = _mm256_and_ps(neighbours, floatNegativeBitAVX);
+    // We now have 0 if the count is above the threshold, and 1 otherwise, but this 
+    // is on the first bit
+    neighboursRounded = *((__m256i*) &neighbours);
+    // Shift 31 bits to the right
+    neighboursRounded = _mm256_srli_epi32(neighboursRounded, 31);
+    neighboursRounded = _mm256_sub_epi32(neighboursRounded, oneAVX);
+
+    // Store the next eight cell states
+    cellStates = _mm256_set_epi32(currentState->cells[(i + 7)].state, currentState->cells[(i + 6)].state, currentState->cells[(i + 5)].state, currentState->cells[(i + 4)].state, currentState->cells[(i + 3)].state, currentState->cells[(i + 2)].state, currentState->cells[(i + 1)].state, currentState->cells[i].state);
+    // And the cell types
+    cellTypes = _mm256_set_epi32(currentState->cells[(i + 7)].type, currentState->cells[(i + 6)].type, currentState->cells[(i + 5)].type, currentState->cells[(i + 4)].type, currentState->cells[(i + 3)].type, currentState->cells[(i + 2)].type, currentState->cells[(i + 1)].type, currentState->cells[i].type);
+    // This value is 0 if the cell is a pacemaker, and some other value otherwise
+    isPacemaker = _mm256_xor_si256(pacemakerAVX, cellTypes);
+    // Clamp value to 0 or 1
+    isPacemaker = _mm256_min_epu32(isPacemaker, oneAVX);
+    // Subtract one so that if the cell is a pacemaker, the bits are all one, and otherwise the bits are all zero
+    isPacemaker = _mm256_sub_epi32(isPacemaker, oneAVX);
+    isTissue = _mm256_xor_si256(tissueAVX, cellTypes);
+    isTissue = _mm256_min_epu32(isTissue, oneAVX);
+    isTissue = _mm256_sub_epi32(isTissue, oneAVX);
+    isResting = _mm256_xor_si256(restingTissueAVX, cellTypes);
+    isResting = _mm256_min_epu32(isResting, oneAVX);
+    isResting = _mm256_sub_epi32(isResting, oneAVX);
+
+    wasActive = _mm256_xor_si256(cellStates, zeroAVX);
+    wasActive = _mm256_min_epu32(wasActive, oneAVX);
+    wasActive = _mm256_sub_epi32(wasActive, oneAVX);
+    wasActive = _mm256_xor_si256(wasActive, allOneBitsAVX);
+
+    // If the cell state is not initially 0, then reduce it by one
+    cellStates = _mm256_sub_epi32(cellStates, _mm256_and_si256(wasActive, oneAVX));
+    isZeroState = _mm256_xor_si256(cellStates, zeroAVX);
+    isZeroState = _mm256_min_epu32(isZeroState, oneAVX);
+    isZeroState = _mm256_sub_epi32(isZeroState, oneAVX);
+    // If the cell state is 0, and the cell is a pacemaker then set the cell state to AP_DURATION
+    cellStates = _mm256_add_epi32(cellStates, _mm256_and_si256(maxStateAVX, _mm256_and_si256(isZeroState, isPacemaker)));
+    // If the cell state is 0 and the cell is resting, then the cell is now set to normal tissue
+    cellTypes = _mm256_add_epi32(cellTypes, _mm256_and_si256(restingToNormal, _mm256_and_si256(isZeroState, isResting)));
+    // If the cell state is 0 and the cell was active, then the cell is now resting tissue with a state of REST_DURATION
+    cellStates = _mm256_add_epi32(cellStates, _mm256_and_si256(restingDurationAVX, _mm256_and_si256(isZeroState, _mm256_and_si256(wasActive, isTissue))));
+    cellTypes = _mm256_add_epi32(cellTypes, _mm256_and_si256(normalToResting, _mm256_and_si256(isZeroState, _mm256_and_si256(wasActive, isTissue))));
+    isTissue = _mm256_xor_si256(tissueAVX, cellTypes);
+    isTissue = _mm256_min_epu32(isTissue, oneAVX);
+    isTissue = _mm256_sub_epi32(isTissue, oneAVX);
+    // Alternatively, then if the cell is normal tissue and not already active, then set the cell's state to AP_DURATION only if the neighbor count is greater than AP_THRESHOLD
+    cellStates = _mm256_add_epi32(cellStates, _mm256_and_si256(maxStateAVX, _mm256_and_si256(neighboursRounded, _mm256_and_si256(isZeroState, isTissue))));
+
+    // Only count the cells as part of the state array if they are a pacemaker or normal tissue cell
+    stateArrayAVX = _mm256_and_si256(cellStates, _mm256_or_si256(isPacemaker, isTissue));
+    _mm256_storeu_si256((__m256i*) cellStatesUpdated, cellStates);
+    _mm256_storeu_si256((__m256i*) cellTypesUpdatedInt, cellTypes);
+    _mm256_storeu_si256((__m256i*) stateArrayUpdated, stateArrayAVX);
+
+    for (int j = 0; j < 8; j++) {
+      currentState->cells[(i + j)].state = cellStatesUpdated[j];
+      currentState->cells[(i + j)].type = cellTypesUpdated[j];
+      stateArray[i + j] = (double) stateArrayUpdated[j];
     }
   }
+  delete[] cellStatesUpdated;
+  delete[] cellTypesUpdatedInt;
 }
 
 void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, double* stateArray, fftw_complex* stateArrayTransformed, double* distanceArray, fftw_plan stateArrayFFT, fftw_plan stateArrayIFFT) {
@@ -210,9 +256,9 @@ void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, doubl
   fftw_execute(stateArrayIFFT);
   // Safe to thread here as mutex is locked when this function is called
   std::thread threads[8];
-  int deltaHeight = currentState->height / 8;
+  int delta = (currentState->width * currentState->height) / 8;
   for (int i = 0; i < 8; i++) {
-    threads[i] = std::thread(updateCellsArea, currentState, distanceArray, stateArray, deltaHeight * i, deltaHeight * (i + 1), 0, currentState -> width);
+    threads[i] = std::thread(updateCellsArea, currentState, distanceArray, stateArray, delta * i, delta * (i + 1));
   }
   for (int i = 0; i < 8; i++) {
     threads[i].join();
