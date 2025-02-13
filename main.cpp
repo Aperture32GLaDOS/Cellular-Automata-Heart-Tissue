@@ -11,6 +11,7 @@
 #include <fftw3.h>
 #include <thread>
 #include <mutex>
+#include <utility>
 
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
@@ -132,7 +133,7 @@ int main (int argc, char *argv[]) {
       cells.width, cells.height, SDL_WINDOW_SHOWN);
   renderer = SDL_CreateRenderer(window, -1, 0);
   // TODO: automatic file location OR have a font folder in the project
-  TTF_Font* font = TTF_OpenFont("/usr/share/fonts/Ubuntu.ttf", 32);
+  TTF_Font* font = TTF_OpenFont("/usr/share/fonts/TTF/FiraCode-Regular.ttf", 32);
   SDL_RenderPresent(renderer);
   bool quit = false;
   bool paused = true;
@@ -144,6 +145,12 @@ int main (int argc, char *argv[]) {
   int mousePosX;
   int mousePosY;
   int frameTime = 500;
+  bool isSelectingRect = false;
+  bool isUsingRect = false;
+  int firstCornerX;
+  int firstCornerY;
+  int secondCornerX;
+  int secondCornerY;
   double* stateArray = fftw_alloc_real(cells.height * cells.width);
   std::thread updateThread(updateCells, &cells, &quit, &paused, &step, &frameTime, stateArray);
   while (!quit) {
@@ -163,6 +170,20 @@ int main (int argc, char *argv[]) {
         }
         else if (currentEvent.key.keysym.sym == SDLK_d) {
           xOffset -= 10;
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_r) {
+          if (!isSelectingRect) {
+            firstCornerX = (mousePosY / zoomFactor) - xOffset;
+            firstCornerY = (mousePosX / zoomFactor) - yOffset;
+          }
+          else {
+            secondCornerX = (mousePosY / zoomFactor) - xOffset;
+            secondCornerY = (mousePosX / zoomFactor) - yOffset;
+          }
+          isSelectingRect = !isSelectingRect;
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_LSHIFT) {
+          isUsingRect = true;
         }
         else if (currentEvent.key.keysym.sym == SDLK_SPACE) {
           paused = !paused;
@@ -219,6 +240,11 @@ int main (int argc, char *argv[]) {
           lock.unlock();
         }
       }
+      else if (currentEvent.type == SDL_KEYUP) {
+        if (currentEvent.key.keysym.sym == SDLK_LSHIFT) {
+          isUsingRect = false;
+        }
+      }
       // Keep the mousePosX and mousePosY updated
       else if (currentEvent.type == SDL_MOUSEMOTION) {
         SDL_GetMouseState(&mousePosX, &mousePosY);
@@ -241,17 +267,44 @@ int main (int argc, char *argv[]) {
       else if (currentEvent.type == SDL_MOUSEBUTTONDOWN) {
         SDL_GetMouseState(&mousePosX, &mousePosY);
         std::unique_lock<std::mutex> lock(mu);
-        Cell* selectedCell = &cells.cells[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)];
-        if (currentEvent.button.button == SDL_BUTTON_LEFT) {
-          selectedCell->state = AP_DURATION;
-          if (selectedCell->type != CellType::RestingTissue) {
-            stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+        if (!isUsingRect) {
+          Cell* selectedCell = &cells.cells[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)];
+          if (currentEvent.button.button == SDL_BUTTON_LEFT) {
+            selectedCell->state = AP_DURATION;
+            if (selectedCell->type != CellType::RestingTissue) {
+              stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+            }
+          }
+          else if (currentEvent.button.button == SDL_BUTTON_RIGHT) {
+            if (selectedCell-> state != 0 && selectedCell->type != CellType::RestingTissue) selectedCell->state = 0;
+            if (selectedCell->type != CellType::RestingTissue) {
+              stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+            }
           }
         }
-        else if (currentEvent.button.button == SDL_BUTTON_RIGHT) {
-          if (selectedCell-> state != 0 && selectedCell->type != CellType::RestingTissue) selectedCell->state = 0;
-          if (selectedCell->type != CellType::RestingTissue) {
-            stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+        else {
+          if (firstCornerX > secondCornerX) {
+            std::swap(firstCornerX, secondCornerX);
+          }
+          if (firstCornerY > secondCornerY) {
+            std::swap(firstCornerY, secondCornerY);
+          }
+          for (int i = firstCornerX; i < secondCornerX; i++) {
+            for (int j = firstCornerY; j < secondCornerY; j++) {
+              Cell* selectedCell = &cells.cells[i * cells.width + j];
+              if (currentEvent.button.button == SDL_BUTTON_LEFT) {
+                selectedCell->state = AP_DURATION;
+                if (selectedCell->type != CellType::RestingTissue) {
+                  stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+                }
+              }
+              else if (currentEvent.button.button == SDL_BUTTON_RIGHT) {
+                if (selectedCell-> state != 0 && selectedCell->type != CellType::RestingTissue) selectedCell->state = 0;
+                if (selectedCell->type != CellType::RestingTissue) {
+                  stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+                }
+              }
+            }
           }
         }
         // TODO: change tissue type on shift-right click (or similar)
