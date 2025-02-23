@@ -5,7 +5,6 @@
 #include <SDL2/SDL_surface.h>
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_error.h>
-#include <complex>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -262,7 +261,7 @@ void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, doubl
   }
   fftw_execute(stateArrayIFFT);
   // Safe to thread here as mutex is locked when this function is called
-  constexpr int NUM_THREADS = 2;
+  constexpr int NUM_THREADS = 8;
   std::thread threads[NUM_THREADS];
   int delta = (currentState->width * currentState->height) / NUM_THREADS;
   for (int i = 0; i < NUM_THREADS; i++) {
@@ -274,11 +273,22 @@ void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, doubl
 }
 
 // Renders the cells at a (currently) 1-1 ratio of cells to pixels
-void renderCells(Cells cells, SDL_Renderer* render, TTF_Font* font, float xOffset, float yOffset, float zoomFactor, int selectedCellI, int selectedCellJ) {
+void renderCells(Cells cells, SDL_Renderer* render, TTF_Font* font, float xOffset, float yOffset, float zoomFactor, int selectedCellI, int selectedCellJ,
+    int firstCornerX, int secondCornerX, int firstCornerY, int secondCornerY) {
   // TODO: render different colours depending on cell state
   SDL_SetRenderDrawColor(render, 0, 0, 0, 0);
   SDL_RenderClear(render);
   SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
+  if (firstCornerX > secondCornerX) {
+    std::swap(firstCornerX, secondCornerX);
+  }
+  if (firstCornerY > secondCornerY) {
+    std::swap(firstCornerY, secondCornerY);
+  }
+  int firstCornerYScreenSpace = (firstCornerX + yOffset) * zoomFactor;
+  int firstCornerXScreenSpace = (firstCornerY + xOffset) * zoomFactor;
+  int secondCornerYScreenSpace = (secondCornerX + yOffset) * zoomFactor;
+  int secondCornerXScreenSpace = (secondCornerY + xOffset) * zoomFactor;
   SDL_FRect cell;
   bool hasSelectedCell = false;
   Cell selectedCell;
@@ -309,6 +319,15 @@ void renderCells(Cells cells, SDL_Renderer* render, TTF_Font* font, float xOffse
         }
       }
     }
+  }
+  SDL_Rect selectedRect;
+  selectedRect.x = firstCornerXScreenSpace;
+  selectedRect.y = firstCornerYScreenSpace;
+  selectedRect.w = secondCornerXScreenSpace - firstCornerXScreenSpace;
+  selectedRect.h = secondCornerYScreenSpace - firstCornerYScreenSpace;
+  SDL_SetRenderDrawColor(render, 0, 255, 0, 255);
+  if (firstCornerX != secondCornerX && firstCornerY != secondCornerY) {
+    SDL_RenderDrawRect(render, &selectedRect);
   }
   if (hasSelectedCell) {
     // TODO: automatic file location OR have a font folder in the project
