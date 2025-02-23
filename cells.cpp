@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <immintrin.h>
 #include <iostream>
@@ -46,20 +47,7 @@ unsigned char* serializeCells(Cells currentState) {
     index++;
   }
   // Serialize all the actual data
-  for (int i = 0; i < currentState.height; i++) {
-    for (int j = 0; j < currentState.width; j++) {
-      Cell currentCell = currentState.cells[i * currentState.width + j];
-      // Serialize the cell type, followed by the state
-      for (int k = 0; k < sizeof(CellType); k++) {
-        serializedData[index] = (unsigned char) (currentCell.type >> (k * 8));
-        index++;
-      }
-      for (int k = 0; k < sizeof(uint); k++) {
-        serializedData[index] = (unsigned char) (currentCell.state >> (k * 8));
-        index++;
-      }
-    }
-  }
+  memcpy(&serializedData[index], currentState.cells, sizeof(Cell) * currentState.width * currentState.height);
   return serializedData;
 }
 
@@ -77,22 +65,7 @@ Cells readCells(unsigned char* serializedData) {
     index++;
   }
   cells.cells = new Cell[cells.height * cells.width];
-  for (int i = 0; i < cells.height; i++) {
-    for (int j = 0; j < cells.width; j++) {
-      Cell currentCell;
-      currentCell.type = (CellType) 0;
-      for (int k = 0; k < sizeof(CellType); k++) {
-        currentCell.type = (CellType) (currentCell.type | (serializedData[index] << k * 8));
-        index++;
-      }
-      currentCell.state = 0;
-      for (int k = 0; k < sizeof(CellType); k++) {
-        currentCell.state = currentCell.state | (serializedData[index] << k * 8);
-        index++;
-      }
-      cells.cells[i * cells.width + j] = currentCell;
-    }
-  }
+  memcpy(cells.cells, &serializedData[index], sizeof(Cell) * cells.width * cells.height);
   return cells;
 }
 
