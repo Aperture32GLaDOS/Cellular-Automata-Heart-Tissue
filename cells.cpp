@@ -5,6 +5,7 @@
 #include <SDL2/SDL_surface.h>
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_error.h>
+#include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -202,6 +203,7 @@ void updateCellsArea(Cells* currentState, double* distanceArray, double* stateAr
 }
 
 void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, double* stateArray, fftw_complex* stateArrayTransformed, double* distanceArray, fftw_plan stateArrayFFT, fftw_plan stateArrayIFFT) {
+  auto start = std::chrono::high_resolution_clock::now();
   // Calculate the FFT of the stateArray
   fftw_execute(stateArrayFFT);
   // Multiply the respective elements of stateArray and distanceCoefficients (distanceCoefficients is already transformed)
@@ -243,12 +245,14 @@ void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, doubl
   for (int i = 0; i < NUM_THREADS; i++) {
     threads[i].join();
   }
+  auto end = std::chrono::high_resolution_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+  std::cout << "Time taken to calculate cells: " << elapsed.count() << "ms" << std::endl;
 }
 
-// Renders the cells at a (currently) 1-1 ratio of cells to pixels
 void renderCells(Cells cells, SDL_Renderer* render, TTF_Font* font, float xOffset, float yOffset, float zoomFactor, int selectedCellI, int selectedCellJ,
     int firstCornerX, int secondCornerX, int firstCornerY, int secondCornerY) {
-  // TODO: render different colours depending on cell state
+  auto start = std::chrono::high_resolution_clock::now();
   SDL_SetRenderDrawColor(render, 0, 0, 0, 0);
   SDL_RenderClear(render);
   SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
@@ -265,8 +269,8 @@ void renderCells(Cells cells, SDL_Renderer* render, TTF_Font* font, float xOffse
   SDL_FRect cell;
   bool hasSelectedCell = false;
   Cell selectedCell;
-  for (int i = 0; i < cells.height; i++) {
-    for (int j = 0; j < cells.width; j++) {
+  for (int i = std::max((int) -yOffset, 0); i < std::min(cells.height, (uint) (cells.height * zoomFactor + yOffset)); i++) {
+    for (int j = std::max((int) -xOffset, 0); j < std::min(cells.width, (uint) (cells.width * zoomFactor + xOffset)); j++) {
       SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
       Cell currentCell = cells.cells[i * cells.width + j];
       if (i == selectedCellI && j == selectedCellJ) {
@@ -319,5 +323,8 @@ void renderCells(Cells cells, SDL_Renderer* render, TTF_Font* font, float xOffse
     delete[] message;
   }
   SDL_RenderPresent(render);
+  auto end = std::chrono::high_resolution_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+  std::cout << "Time taken to render cells: " << elapsed.count() << "ms" << std::endl;
 }
 

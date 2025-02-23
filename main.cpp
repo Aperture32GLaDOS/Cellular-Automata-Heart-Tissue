@@ -3,6 +3,7 @@
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_keycode.h>
 #include <SDL2/SDL_mouse.h>
+#include <SDL2/SDL_render.h>
 #include <SDL2/SDL_syswm.h>
 #include <SDL2/SDL_video.h>
 #include <SDL2/SDL_ttf.h>
@@ -123,15 +124,9 @@ int main (int argc, char *argv[]) {
       cells.cells[i * cells.width + j] = newCell;
     }
   }
-  for (int i = -3; i <= 3; i++) {
-    for (int j = -3; j <= 3; j++) {
-      cells.cells[(cells.height / 2 + i) * cells.width + (cells.width / 2 + j)].type = CellType::Pacemaker;
-    }
-  }
-  cells.cells[(cells.height / 2) * cells.width + (cells.width / 2)].state = AP_DURATION;
   window = SDL_CreateWindow("Heart Tissue", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
       cells.width, cells.height, SDL_WINDOW_SHOWN);
-  renderer = SDL_CreateRenderer(window, -1, 0);
+  renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
   // TODO: automatic file location OR have a font folder in the project
   TTF_Font* font = TTF_OpenFont("/usr/share/fonts/TTF/FiraCode-Regular.ttf", 32);
   SDL_RenderPresent(renderer);
