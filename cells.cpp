@@ -31,6 +31,9 @@ const char* cellTypeToString(CellType type) {
       return "Pacemaker Cell";
     case CellType::RestingTissue:
       return "Resting Cell";
+    default:
+      std::cout << "ERROR!!! Unkown Cell Type Encountered";
+      return NULL;
   }
 }
 
@@ -70,7 +73,7 @@ Cells readCells(unsigned char* serializedData) {
   return cells;
 }
 
-void saveCellsToFile(Cells cells, char* fileName) {
+void saveCellsToFile(Cells cells, const char* fileName) {
   unsigned char* data = serializeCells(cells);
   std::ofstream outputStream;
   outputStream.open(fileName);
@@ -79,7 +82,7 @@ void saveCellsToFile(Cells cells, char* fileName) {
   delete[] data;
 }
 
-Cells readCellsFromFile(char* fileName) {
+Cells readCellsFromFile(const char* fileName) {
   std::ifstream inputStream;
   inputStream.open(fileName);
   inputStream.seekg(0, std::ios::end);

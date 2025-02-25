@@ -66,7 +66,7 @@ void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameT
   for (int i = 0; i < SEARCH_RADIUS; i++) {
     for (int j = 0; j < SEARCH_RADIUS; j++) {
       if (i == SEARCH_RADIUS / 2 && j == SEARCH_RADIUS / 2) continue;
-      double distance = (i - SEARCH_RADIUS / 2) * (i - SEARCH_RADIUS / 2) + (j - SEARCH_RADIUS / 2) * (j - SEARCH_RADIUS / 2);
+      double distance = (i - SEARCH_RADIUS / 2.0) * (i - SEARCH_RADIUS / 2.0) + (j - SEARCH_RADIUS / 2.0) * (j - SEARCH_RADIUS / 2.0);
       distanceCoefficients[(i * SEARCH_RADIUS) + j] = 1.0 / distance;
     }
   }
