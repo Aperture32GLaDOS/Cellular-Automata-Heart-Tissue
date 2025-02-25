@@ -272,8 +272,8 @@ void renderCells(Cells cells, SDL_Renderer* render, TTF_Font* font, float xOffse
   SDL_FRect cell;
   bool hasSelectedCell = false;
   Cell selectedCell;
-  for (int i = std::max((int) -yOffset, 0); i < std::min(cells.height, (uint) (cells.height * zoomFactor + yOffset)); i++) {
-    for (int j = std::max((int) -xOffset, 0); j < std::min(cells.width, (uint) (cells.width * zoomFactor + xOffset)); j++) {
+  for (int i = std::max((int) -yOffset, 0); i < std::min(cells.height, (uint) (cells.height / zoomFactor - yOffset)); i++) {
+    for (int j = std::max((int) -xOffset, 0); j < std::min(cells.width, (uint) (cells.width / zoomFactor - xOffset)); j++) {
       SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
       Cell currentCell = cells.cells[i * cells.width + j];
       if (i == selectedCellI && j == selectedCellJ) {
