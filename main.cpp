@@ -139,6 +139,8 @@ int main (int argc, char *argv[]) {
   float zoomFactor = 1;
   int mousePosX;
   int mousePosY;
+  int selectedCellX;
+  int selectedCellY;
   int frameTime = 500;
   bool isSelectingRect = false;
   bool isUsingRect = false;
@@ -171,12 +173,12 @@ int main (int argc, char *argv[]) {
         }
         else if (currentEvent.key.keysym.sym == SDLK_r) {
           if (!isSelectingRect) {
-            firstCornerX = (mousePosY / zoomFactor) - yOffset;
-            firstCornerY = (mousePosX / zoomFactor) - xOffset;
+            firstCornerX = selectedCellY;
+            firstCornerY = selectedCellX;
           }
           else {
-            secondCornerX = (mousePosY / zoomFactor) - yOffset;
-            secondCornerY = (mousePosX / zoomFactor) - xOffset;
+            secondCornerX = selectedCellY;
+            secondCornerY = selectedCellX;
           }
           isSelectingRect = !isSelectingRect;
         }
@@ -246,6 +248,11 @@ int main (int argc, char *argv[]) {
       // Keep the mousePosX and mousePosY updated
       else if (currentEvent.type == SDL_MOUSEMOTION) {
         SDL_GetMouseState(&mousePosX, &mousePosY);
+        selectedCellY = (int) ((mousePosY / zoomFactor) - yOffset) % cells.height;
+        selectedCellX = (int) ((mousePosX / zoomFactor) - xOffset) % cells.width;
+        if ((mousePosX / zoomFactor) - xOffset < 0) {
+          selectedCellX--;
+        }
       }
       else if (currentEvent.type == SDL_MOUSEWHEEL) {
         // Calculate the selected X and Y pixel
@@ -266,27 +273,27 @@ int main (int argc, char *argv[]) {
         SDL_GetMouseState(&mousePosX, &mousePosY);
         std::unique_lock<std::mutex> lock(mu);
         if (!isUsingRect) {
-          Cell* selectedCell = &cells.cells[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)];
+          Cell* selectedCell = &cells.cells[selectedCellY * cells.width + selectedCellX];
           if (currentEvent.button.button == SDL_BUTTON_LEFT) {
             selectedCell->state = AP_DURATION;
             if (selectedCell->type != CellType::RestingTissue) {
-              stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+              stateArray[selectedCellY * cells.width + selectedCellX] = selectedCell->state;
             }
           }
           else if (currentEvent.button.button == SDL_BUTTON_RIGHT) {
             if (selectedCell-> state != 0 && selectedCell->type != CellType::RestingTissue) selectedCell->state = 0;
             if (selectedCell->type != CellType::RestingTissue) {
-              stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+              stateArray[selectedCellY * cells.width + selectedCellX] = selectedCell->state;
             }
           }
           else if (currentEvent.button.button == SDL_BUTTON_MIDDLE) {
             if (selectedCell->type == CellType::RestingTissue) {
               selectedCell->type = CellType::Tissue;
-              stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = selectedCell->state;
+              stateArray[selectedCellY * cells.width + selectedCellX] = selectedCell->state;
             }
             else if (selectedCell->type == CellType::Tissue) {
               selectedCell->type = CellType::RestingTissue;
-              stateArray[((int) ((mousePosY / zoomFactor) - yOffset)) * cells.width + (int) ((mousePosX / zoomFactor) - xOffset)] = 0;
+              stateArray[selectedCellY * cells.width + selectedCellX] = 0;
             }
           }
         }
@@ -330,7 +337,7 @@ int main (int argc, char *argv[]) {
       }
     }
     std::unique_lock<std::mutex> lock(mu);
-    renderCells(cells, renderer, font, xOffset, yOffset, zoomFactor, ((int) ((mousePosY / zoomFactor) - yOffset)), (int) ((mousePosX / zoomFactor) - xOffset), firstCornerX, secondCornerX, firstCornerY, secondCornerY);
+    renderCells(cells, renderer, font, xOffset, yOffset, zoomFactor, selectedCellY, selectedCellX, firstCornerX, secondCornerX, firstCornerY, secondCornerY);
     lock.unlock();
     // Use fewer CPU cycles if paused
     if (paused) {
