@@ -128,9 +128,9 @@ void updateCellsArea(Cells* currentState, double* distanceArray, double* stateAr
   __m256 thresholdAVX = _mm256_set1_ps(AP_THRESHOLD);
   __m256i restingToNormal = _mm256_sub_epi32(tissueAVX, restingTissueAVX);
   __m256i normalToResting = _mm256_sub_epi32(restingTissueAVX, tissueAVX);
-  int* cellStatesUpdated = new int[8];
-  int* cellTypesUpdatedInt = new int[8];
-  int* stateArrayUpdated = new int[8];
+  int cellStatesUpdated[8];
+  int cellTypesUpdatedInt[8];
+  int stateArrayUpdated[8];
   CellType* cellTypesUpdated = (CellType*) cellTypesUpdatedInt;
   for (int i = start; i < end; i+=8) {
     // Convert neighbourhood counts to single-precision, so 8 of them can be stored at once
@@ -201,8 +201,6 @@ void updateCellsArea(Cells* currentState, double* distanceArray, double* stateAr
       stateArray[i + j] = (double) stateArrayUpdated[j];
     }
   }
-  delete[] cellStatesUpdated;
-  delete[] cellTypesUpdatedInt;
 }
 
 void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, double* stateArray, fftw_complex* stateArrayTransformed, double* distanceArray, fftw_plan stateArrayFFT, fftw_plan stateArrayIFFT) {
@@ -272,8 +270,8 @@ void renderCells(Cells cells, SDL_Renderer* render, TTF_Font* font, float xOffse
   SDL_FRect cell;
   bool hasSelectedCell = false;
   Cell selectedCell;
-  for (int i = std::max((int) -yOffset, 0); i < std::min(cells.height, (uint) (cells.height / zoomFactor - yOffset)); i++) {
-    for (int j = std::max((int) -xOffset, 0); j < std::min(cells.width, (uint) (cells.width / zoomFactor - xOffset)); j++) {
+  for (int i = std::max((int) -yOffset - 1, 0); i < std::min(cells.height, (uint) (cells.height / zoomFactor - yOffset) + 1); i++) {
+    for (int j = std::max((int) -xOffset - 1, 0); j < std::min(cells.width, (uint) (cells.width / zoomFactor - xOffset) + 1); j++) {
       SDL_SetRenderDrawColor(render, 255, 0, 0, 255);
       Cell currentCell = cells.cells[i * cells.width + j];
       if (i == selectedCellI && j == selectedCellJ) {

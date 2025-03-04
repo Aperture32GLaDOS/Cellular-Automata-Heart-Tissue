@@ -128,7 +128,7 @@ int main (int argc, char *argv[]) {
       cells.width, cells.height, SDL_WINDOW_SHOWN);
   renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
   // TODO: automatic file location OR have a font folder in the project
-  TTF_Font* font = TTF_OpenFont("/usr/share/fonts/TTF/FiraCode-Regular.ttf", 32);
+  TTF_Font* font = TTF_OpenFont("/usr/share/fonts/TTF/FiraCode-Regular.ttf", 16);
   SDL_RenderPresent(renderer);
   bool quit = false;
   bool paused = true;

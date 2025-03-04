@@ -1,11 +1,11 @@
 #include <cstdint>
 #include <sys/types.h>
 #include <SDL2/SDL_render.h>
-#define SIZE 1024
-#define SEARCH_RADIUS 35
+#define SIZE 512
+#define SEARCH_RADIUS 64
 #define AP_DURATION 32
 #define REST_DURATION 8
-#define AP_THRESHOLD 16
+#define AP_THRESHOLD 64
 
 enum CellType {
   // A heart cell here is represented either as a pacemaker cell, or a normal tissue cell
