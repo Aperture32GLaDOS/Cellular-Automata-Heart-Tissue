@@ -1,2 +1,12 @@
-- Implement heart tissue rules
 - Create tools for analyzing cellular automata behaviour (i.e. average state over area, how state changes over time, etc.)
+- Implement fiber orientation rules
+    - Each cell has its own orientation
+    - This is stored as an index
+    - The neighbourhood array is now 2D, indexed first by the cell's orientation, and secondly by the cell's position in the simulation
+    (i.e. array[(cell.id) * numOrientations + cell.orientationId])
+    - When a cell's orientation is changed, change its orientation ID
+    - Check if the new orientation is within 5 degrees of an existing orientation and if so, use the existing one
+    - Otherwise, increment numOrientations and add a new orientation
+        - This will be very expensive, requiring a complete free and re-allocation of the neighbourhood array, along with several others
+        - This is fine, as the cells orientations will not be changing very often
+            - If this changes, this could be counter-acted by allocating more memory than required, and only re-allocating when this memory is insufficient
