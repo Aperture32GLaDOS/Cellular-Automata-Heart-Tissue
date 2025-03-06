@@ -144,10 +144,10 @@ int main (int argc, char *argv[]) {
   int frameTime = 500;
   bool isSelectingRect = false;
   bool isUsingRect = false;
-  int firstCornerX;
   int firstCornerY;
-  int secondCornerX;
+  int firstCornerX;
   int secondCornerY;
+  int secondCornerX;
   double* stateArray = fftw_alloc_real(cells.height * cells.width);
   for (int i = 0; i < cells.height * cells.width; i++) {
     stateArray[i] = 0.0;
@@ -173,12 +173,12 @@ int main (int argc, char *argv[]) {
         }
         else if (currentEvent.key.keysym.sym == SDLK_r) {
           if (!isSelectingRect) {
-            firstCornerX = selectedCellY;
-            firstCornerY = selectedCellX;
+            firstCornerY = selectedCellY;
+            firstCornerX = selectedCellX;
           }
           else {
-            secondCornerX = selectedCellY;
-            secondCornerY = selectedCellX;
+            secondCornerY = selectedCellY;
+            secondCornerX = selectedCellX;
           }
           isSelectingRect = !isSelectingRect;
         }
@@ -298,14 +298,14 @@ int main (int argc, char *argv[]) {
           }
         }
         else {
-          if (firstCornerX > secondCornerX) {
-            std::swap(firstCornerX, secondCornerX);
-          }
           if (firstCornerY > secondCornerY) {
             std::swap(firstCornerY, secondCornerY);
           }
-          for (int i = firstCornerX; i < secondCornerX; i++) {
-            for (int j = firstCornerY; j < secondCornerY; j++) {
+          if (firstCornerX > secondCornerX) {
+            std::swap(firstCornerX, secondCornerX);
+          }
+          for (int i = firstCornerY; i < secondCornerY; i++) {
+            for (int j = firstCornerX; j < secondCornerX; j++) {
               Cell* selectedCell = &cells.cells[i * cells.width + j];
               if (currentEvent.button.button == SDL_BUTTON_LEFT) {
                 selectedCell->state = AP_DURATION;
@@ -337,7 +337,7 @@ int main (int argc, char *argv[]) {
       }
     }
     std::unique_lock<std::mutex> lock(mu);
-    renderCells(cells, renderer, font, xOffset, yOffset, zoomFactor, selectedCellY, selectedCellX, firstCornerX, secondCornerX, firstCornerY, secondCornerY);
+    renderCells(cells, renderer, font, xOffset, yOffset, zoomFactor, selectedCellY, selectedCellX, firstCornerY, secondCornerY, firstCornerX, secondCornerX);
     lock.unlock();
     // Use fewer CPU cycles if paused
     if (paused) {
