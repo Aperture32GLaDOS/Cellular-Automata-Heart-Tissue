@@ -86,6 +86,23 @@ class NeighbourCounter {
       neighbourArray = fftw_alloc_real(cells->height * cells->width * numOrientations);
       initialize();
     }
+    ~NeighbourCounter() {
+      delete[] stateArrayFFT;
+      delete[] distanceCoefficientsFFT;
+      delete[] stateArrayIFFT;
+      for (int i = 0; i < cells->numOrientations; i++) {
+        fftw_free(distanceCoefficients[i]);
+        fftw_free(distanceCoefficientsPadded[i]);
+        fftw_free(distanceCoefficientsTransformed[i]);
+        fftw_free(neighbourArraysTransformed[i]);
+        fftw_free(neighbourArrays[i]);
+      }
+      delete[] distanceCoefficients;
+      delete[] distanceCoefficientsPadded;
+      delete[] neighbourArrays;
+      delete[] neighbourArraysTransformed;
+      delete[] distanceCoefficientsTransformed;
+    }
     void reinitialize() {
       // If the number of orientations has changed, then all the arrays must be reinitialized
       if (cells->numOrientations != numOrientations) {
