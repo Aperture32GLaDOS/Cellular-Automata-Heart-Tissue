@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
+#include <forward_list>
 #include <fstream>
 #include <immintrin.h>
 #include <iostream>
@@ -20,7 +21,7 @@
 #include "cells.h"
 
 uint getSizeOfData(Cells data) {
-  return sizeof(uint) * 2 + sizeof(Cell) * data.height * data.width;
+  return sizeof(uint) * 3 + sizeof(Cell) * data.height * data.width + (sizeof(float) * 2 + sizeof(uint)) * data.numOrientations;
 }
 
 const char* cellTypeToString(CellType type) {
@@ -50,8 +51,28 @@ unsigned char* serializeCells(Cells currentState) {
     serializedData[index] = (unsigned char) (currentState.height >> (i * 8));
     index++;
   }
+  for (int i = 0; i < sizeof(uint); i++) {
+    serializedData[index] = (unsigned char) (currentState.numOrientations >> (i * 8));
+    index++;
+  }
   // Serialize all the actual data
   memcpy(&serializedData[index], currentState.cells, sizeof(Cell) * currentState.width * currentState.height);
+  index += sizeof(Cell) * currentState.width * currentState.height;
+  // Serialize all the orientations
+  for (int i = 0; i < currentState.numOrientations; i++) {
+    for (int j = 0; j < sizeof(float); j++) {
+      serializedData[index] = (unsigned char) (*((int*) &currentState.orientations[i].xDir) >> (j * 8));
+      index++;
+    }
+    for (int j = 0; j < sizeof(float); j++) {
+      serializedData[index] = (unsigned char) (*((int*) &currentState.orientations[i].yDir) >> (j * 8));
+      index++;
+    }
+    for (int j = 0; j < sizeof(uint); j++) {
+      serializedData[index] = (unsigned char) (currentState.orientations[i].cellCount >> (j * 8));
+      index++;
+    }
+  }
   return serializedData;
 }
 
@@ -68,8 +89,40 @@ Cells readCells(unsigned char* serializedData) {
     cells.height = cells.height | (serializedData[index] << i * 8);
     index++;
   }
+  cells.numOrientations = 0;
+  for (int i = 0; i < sizeof(uint); i++) {
+    cells.numOrientations = cells.numOrientations | (serializedData[index] << i * 8);
+    index++;
+  }
   cells.cells = new Cell[cells.height * cells.width];
+  cells.orientations = new Orientation[cells.numOrientations];
   memcpy(cells.cells, &serializedData[index], sizeof(Cell) * cells.width * cells.height);
+  index += sizeof(Cell) * cells.width * cells.height;
+  for (int i = 0; i < cells.numOrientations; i++) {
+    long temp = 0;
+    for (int j = 0; j < sizeof(float); j++) {
+      temp = temp | (serializedData[index] << j * 8);
+      index++;
+    }
+    cells.orientations[i].xDir = *((float*) &temp);
+    temp = 0;
+    for (int j = 0; j < sizeof(float); j++) {
+      temp = temp | (serializedData[index] << j * 8);
+      index++;
+    }
+    cells.orientations[i].yDir = *((float*) &temp);
+    cells.orientations[i].cellCount = 0;
+    for (int j = 0; j < sizeof(uint); j++) {
+      cells.orientations[i].cellCount = cells.orientations[i].cellCount | (serializedData[index] << j * 8);
+      index++;
+    }
+    // Rebuilds the orientation.cells forward_list
+    for (int k = 0; k < cells.height * cells.width; k++) {
+      if (cells.cells[k].orientationIndex == i) {
+        cells.orientations[i].cells.push_front(&cells.cells[k]);
+      }
+    }
+  }
   return cells;
 }
 

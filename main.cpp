@@ -115,12 +115,15 @@ int main (int argc, char *argv[]) {
   cells.width = SIZE;
   cells.height = SIZE;
   cells.cells = new Cell[cells.height * cells.width];
+  cells.numOrientations = 0;
+  cells.orientations = new Orientation[0];
   // Initialize all cells to be inactive normal tissue
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
       Cell newCell;
       newCell.type = CellType::Tissue;
       newCell.state = 0;
+      newCell.orientationIndex = 0;
       cells.cells[i * cells.width + j] = newCell;
     }
   }
@@ -128,7 +131,7 @@ int main (int argc, char *argv[]) {
       cells.width, cells.height, SDL_WINDOW_SHOWN);
   renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
   // TODO: automatic file location OR have a font folder in the project
-  TTF_Font* font = TTF_OpenFont("/usr/share/fonts/TTF/FiraCode-Regular.ttf", 16);
+  TTF_Font* font = TTF_OpenFont("/usr/share/fonts/TTF/FiraCode-Regular.ttf", 32);
   SDL_RenderPresent(renderer);
   bool quit = false;
   bool paused = true;
