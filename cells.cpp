@@ -181,14 +181,27 @@ void updateCellsArea(Cells* currentState, double* distanceArray, double* stateAr
   __m256 thresholdAVX = _mm256_set1_ps(AP_THRESHOLD);
   __m256i restingToNormal = _mm256_sub_epi32(tissueAVX, restingTissueAVX);
   __m256i normalToResting = _mm256_sub_epi32(restingTissueAVX, tissueAVX);
+  __m256i cellOrientationIndexFirstHalf;
+  __m256i cellOrientationIndexSecondHalf;
+  __m256i cellIDsFirstHalf;
+  __m256i cellIDsSecondHalf;
+  __m256i stateIndexFirstHalf;
+  __m256i stateIndexSecondHalf;
+  __m256i numOrientations = _mm256_set1_epi32(currentState->numOrientations);
   int cellStatesUpdated[8];
   int cellTypesUpdatedInt[8];
   int stateArrayUpdated[8];
   CellType* cellTypesUpdated = (CellType*) cellTypesUpdatedInt;
   for (int i = start; i < end; i+=8) {
+    cellIDsFirstHalf = _mm256_set_epi32(0, i + 3, 0, i + 2, 0, i + 1, 0, i);
+    cellIDsSecondHalf = _mm256_set_epi32(0, i + 7, 0, i + 6, 0, i + 5, 0, i + 4);
+    cellOrientationIndexFirstHalf = _mm256_set_epi64x(currentState->cells[(i + 3)].orientationIndex, currentState->cells[(i + 2)].orientationIndex, currentState->cells[(i + 1)].orientationIndex, currentState->cells[i].orientationIndex);
+    cellOrientationIndexSecondHalf = _mm256_set_epi64x(currentState->cells[(i + 7)].orientationIndex, currentState->cells[(i + 6)].orientationIndex, currentState->cells[(i + 5)].orientationIndex, currentState->cells[(i + 4)].orientationIndex);
     // Convert neighbourhood counts to single-precision, so 8 of them can be stored at once
-    firstHalfNeighbours = _mm256_set_pd(distanceArray[(i + 3)], distanceArray[(i + 2)], distanceArray[(i + 1)], distanceArray[i]);
-    secondHalfNeighbours = _mm256_set_pd(distanceArray[(i + 7)], distanceArray[(i + 6)], distanceArray[(i + 5)], distanceArray[(i + 4)]);
+    stateIndexFirstHalf = _mm256_add_epi64(_mm256_mul_epu32(cellIDsFirstHalf, numOrientations), cellOrientationIndexFirstHalf);
+    stateIndexSecondHalf = _mm256_add_epi64(_mm256_mul_epu32(cellIDsSecondHalf, numOrientations), cellOrientationIndexSecondHalf);
+    firstHalfNeighbours = _mm256_i64gather_pd(distanceArray, stateIndexFirstHalf, 8);
+    secondHalfNeighbours = _mm256_i64gather_pd(distanceArray, stateIndexSecondHalf, 8);
     firstHalfNeighboursSingle = _mm256_cvtpd_ps(firstHalfNeighbours);
     secondHalfNeighboursSingle = _mm256_cvtpd_ps(secondHalfNeighbours);
     neighbours = _mm256_castps128_ps256(firstHalfNeighboursSingle);
@@ -256,45 +269,15 @@ void updateCellsArea(Cells* currentState, double* distanceArray, double* stateAr
   }
 }
 
-void advanceCells(Cells* currentState, fftw_complex* distanceCoefficients, double* stateArray, fftw_complex* stateArrayTransformed, double* distanceArray, fftw_plan stateArrayFFT, fftw_plan stateArrayIFFT) {
+void advanceCells(Cells* currentState, NeighbourCounter* neighbourCounter) {
   auto start = std::chrono::high_resolution_clock::now();
-  // Calculate the FFT of the stateArray
-  fftw_execute(stateArrayFFT);
-  // Multiply the respective elements of stateArray and distanceCoefficients (distanceCoefficients is already transformed)
-  // We use AVX intrinsics here for a ~4x speedup
-  __m256d normalizationFactor;
-  __m256d realStateArray;
-  __m256d imagStateArray;
-  __m256d realDistanceCoefficient;
-  __m256d imagDistanceCoefficient;
-  __m256d realResult;
-  __m256d imagResult;
-  double real[4];
-  double imag[4];
-  for (int i = 0; i < currentState->height * (currentState->width / 2 + 1); i += 4) {
-    normalizationFactor = _mm256_set1_pd(currentState->height * currentState->width);
-    realStateArray = _mm256_set_pd(stateArrayTransformed[i + 3][0], stateArrayTransformed[i + 2][0], stateArrayTransformed[i + 1][0], stateArrayTransformed[i][0]);
-    imagStateArray = _mm256_set_pd(stateArrayTransformed[i + 3][1], stateArrayTransformed[i + 2][1], stateArrayTransformed[i + 1][1], stateArrayTransformed[i][1]);
-    realDistanceCoefficient = _mm256_set_pd(distanceCoefficients[i + 3][0], distanceCoefficients[i + 2][0], distanceCoefficients[i + 1][0], distanceCoefficients[i][0]);
-    imagDistanceCoefficient = _mm256_set_pd(distanceCoefficients[i + 3][1], distanceCoefficients[i + 2][1], distanceCoefficients[i + 1][1], distanceCoefficients[i][1]);
-    realResult = _mm256_sub_pd(_mm256_mul_pd(realStateArray, realDistanceCoefficient), _mm256_mul_pd(imagStateArray, imagDistanceCoefficient));
-    imagResult = _mm256_add_pd(_mm256_mul_pd(realStateArray, imagDistanceCoefficient), _mm256_mul_pd(imagStateArray, realDistanceCoefficient));
-    realResult = _mm256_div_pd(realResult, normalizationFactor);
-    imagResult = _mm256_div_pd(imagResult, normalizationFactor);
-    _mm256_storeu_pd(real, realResult);
-    _mm256_storeu_pd(imag, imagResult);
-    for (int j = 0; j < 4; j++) {
-      stateArrayTransformed[i + j][0] = real[j];
-      stateArrayTransformed[i + j][1] = imag[j];
-    }
-  }
-  fftw_execute(stateArrayIFFT);
+  neighbourCounter->calculateNeighbourCounts();
   // Safe to thread here as mutex is locked when this function is called
   constexpr int NUM_THREADS = 8;
   std::thread threads[NUM_THREADS];
   int delta = (currentState->width * currentState->height) / NUM_THREADS;
   for (int i = 0; i < NUM_THREADS; i++) {
-    threads[i] = std::thread(updateCellsArea, currentState, distanceArray, stateArray, delta * i, delta * (i + 1));
+    threads[i] = std::thread(updateCellsArea, currentState, neighbourCounter->neighbourArray, neighbourCounter->stateArray, delta * i, delta * (i + 1));
   }
   for (int i = 0; i < NUM_THREADS; i++) {
     threads[i].join();

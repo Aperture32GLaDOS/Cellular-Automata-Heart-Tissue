@@ -49,37 +49,14 @@ void shiftConvolution(double* originalConvolution, double* shiftedConvolution, i
 }
 
 // Updates the cells in a seperate thread, so as to keep the render updates fast
-void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameTime, double* stateArray) {
+void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameTime, double* stateArray, NeighbourCounter* neighbourCounter) {
   long int startTime;
   long int elapsedTime;
-  double* distanceCoefficientsPadded = fftw_alloc_real(cells->height * cells->width);
-  // Complex arrays roughly half the size since FFTW takes advantage of complex conjugates
-  fftw_complex* distanceCoefficientsTransformed = fftw_alloc_complex(cells->height * (cells->width / 2 + 1));
-  fftw_complex* stateArrayTransformed = fftw_alloc_complex(cells->height * (cells->width / 2 + 1));
-  double* distanceArray = fftw_alloc_real(cells->height * cells->width);
-  // Plan FFTs before array initialization
-  fftw_plan distanceCoefficientsFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, distanceCoefficientsPadded, distanceCoefficientsTransformed, 0);
-  fftw_plan stateArrayFFT = fftw_plan_dft_r2c_2d(cells->height, cells->width, stateArray, stateArrayTransformed, 0);
-  fftw_plan stateArrayIFFT = fftw_plan_dft_c2r_2d(cells->height, cells->width, stateArrayTransformed, distanceArray, 0);
-  double* distanceCoefficients = new double[SEARCH_RADIUS * SEARCH_RADIUS];
-  int offsetLength = 0;
-  for (int i = 0; i < SEARCH_RADIUS; i++) {
-    for (int j = 0; j < SEARCH_RADIUS; j++) {
-      if (i == SEARCH_RADIUS / 2 && j == SEARCH_RADIUS / 2) continue;
-      double distance = (i - SEARCH_RADIUS / 2.0) * (i - SEARCH_RADIUS / 2.0) + (j - SEARCH_RADIUS / 2.0) * (j - SEARCH_RADIUS / 2.0);
-      distanceCoefficients[(i * SEARCH_RADIUS) + j] = 1.0 / distance;
-    }
-  }
-  shiftConvolution(distanceCoefficients, distanceCoefficientsPadded, SEARCH_RADIUS, cells->height, cells->width);
-  delete[] distanceCoefficients;
-  fftw_execute(distanceCoefficientsFFT);
-  // The coeffients never change, and therefore only need to be transformed once
-  fftw_destroy_plan(distanceCoefficientsFFT);
   while (!(*quit)) {
     startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     // Lock the mutex, as data is being written
     std::unique_lock<std::mutex> lock(mu);
-    advanceCells(cells, distanceCoefficientsTransformed, stateArray, stateArrayTransformed, distanceArray, stateArrayFFT, stateArrayIFFT);
+    advanceCells(cells, neighbourCounter);
     lock.unlock();
     elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - startTime;
     if (elapsedTime <= *frameTime) {
@@ -91,18 +68,11 @@ void updateCells(Cells* cells, bool* quit, bool* paused, bool* step, int* frameT
       if (*step) {
         *step = false;
         std::unique_lock<std::mutex> lock(mu);
-        advanceCells(cells, distanceCoefficientsTransformed, stateArray, stateArrayTransformed, distanceArray, stateArrayFFT, stateArrayIFFT);
+        advanceCells(cells, neighbourCounter);
         lock.unlock();
       }
     }
   }
-  // Cleanup
-  fftw_destroy_plan(stateArrayFFT);
-  fftw_destroy_plan(stateArrayIFFT);
-  fftw_free(distanceCoefficientsPadded);
-  fftw_free(distanceCoefficientsTransformed);
-  fftw_free(stateArrayTransformed);
-  fftw_free(distanceArray);
 }
 
 
@@ -115,15 +85,28 @@ int main (int argc, char *argv[]) {
   cells.width = SIZE;
   cells.height = SIZE;
   cells.cells = new Cell[cells.height * cells.width];
-  cells.numOrientations = 0;
-  cells.orientations = new Orientation[0];
+  cells.numOrientations = 2;
+  cells.orientations = new Orientation[2];
+  cells.orientations[0].xDir = 1.0;
+  cells.orientations[0].yDir = -1.0;
+  cells.orientations[0].cellCount = cells.height * cells.width * 0.5;
+  cells.orientations[1].xDir = 0.0;
+  cells.orientations[1].yDir = -1.0;
+  cells.orientations[1].cellCount = cells.height * cells.width * 0.5;
   // Initialize all cells to be inactive normal tissue
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
       Cell newCell;
       newCell.type = CellType::Tissue;
       newCell.state = 0;
-      newCell.orientationIndex = 0;
+      if (j < cells.width / 2) {
+        newCell.orientationIndex = 0;
+        cells.orientations[0].cells.push_front(&newCell);
+      }
+      else {
+        newCell.orientationIndex = 1;
+        cells.orientations[1].cells.push_front(&newCell);
+      }
       cells.cells[i * cells.width + j] = newCell;
     }
   }
@@ -155,7 +138,8 @@ int main (int argc, char *argv[]) {
   for (int i = 0; i < cells.height * cells.width; i++) {
     stateArray[i] = 0.0;
   }
-  std::thread updateThread(updateCells, &cells, &quit, &paused, &step, &frameTime, stateArray);
+  NeighbourCounter neighbourCounter(&cells, stateArray);
+  std::thread updateThread(updateCells, &cells, &quit, &paused, &step, &frameTime, stateArray, &neighbourCounter);
   while (!quit) {
     while (SDL_PollEvent(&currentEvent) != 0) {
       if (currentEvent.type == SDL_QUIT) {
@@ -210,6 +194,7 @@ int main (int argc, char *argv[]) {
           std::unique_lock<std::mutex> lock(mu);
           // Delete the old array so as to avoid a memory leak
           delete[] cells.cells;
+          delete[] cells.orientations;
           cells = readCellsFromFile("cells.dmp");
           SDL_SetWindowSize(window, cells.width, cells.height);
           for (int i = 0; i < cells.height; i++) {
@@ -223,6 +208,7 @@ int main (int argc, char *argv[]) {
               }
             }
           }
+          neighbourCounter.reinitialize();
           lock.unlock();
         }
         else if (currentEvent.key.keysym.sym == SDLK_MINUS) {
