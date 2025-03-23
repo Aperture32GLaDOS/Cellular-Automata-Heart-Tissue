@@ -167,7 +167,10 @@ class NeighbourCounter {
           double distance = xCoord * xCoord + yCoord * yCoord;
           double dotProduct = xCoord * orientation.xDir + yCoord * orientation.yDir;
           double cosTheta = dotProduct / (std::sqrt(distance) * std::sqrt(orientation.xDir * orientation.xDir + orientation.yDir * orientation.yDir));
-          coefficients[(i * SEARCH_RADIUS) + j] = (1.0 / distance) * (cosTheta + 1) * 0.5;
+          cosTheta = std::abs(cosTheta);
+          double distanceFactor = (cosTheta + (1.0 / 3.0)) * 0.75;
+          distanceFactor = std::pow(distanceFactor, 2.0);
+          coefficients[(i * SEARCH_RADIUS) + j] = (1.0 / distance) * distanceFactor;
         }
       }
     }

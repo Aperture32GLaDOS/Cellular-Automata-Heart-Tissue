@@ -8,6 +8,7 @@
 #include <SDL2/SDL_video.h>
 #include <SDL2/SDL_ttf.h>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <fftw3.h>
 #include <thread>
@@ -88,10 +89,10 @@ int main (int argc, char *argv[]) {
   cells.numOrientations = 2;
   cells.orientations = new Orientation[2];
   cells.orientations[0].xDir = 1.0;
-  cells.orientations[0].yDir = -1.0;
+  cells.orientations[0].yDir = 0.0;
   cells.orientations[0].cellCount = cells.height * cells.width * 0.5;
   cells.orientations[1].xDir = 0.0;
-  cells.orientations[1].yDir = -1.0;
+  cells.orientations[1].yDir = 1.0;
   cells.orientations[1].cellCount = cells.height * cells.width * 0.5;
   // Initialize all cells to be inactive normal tissue
   for (int i = 0; i < cells.height; i++) {
@@ -134,6 +135,8 @@ int main (int argc, char *argv[]) {
   int firstCornerX;
   int secondCornerY;
   int secondCornerX;
+  int highlightedX = -1;
+  int highlightedY = -1;
   double* stateArray = fftw_alloc_real(cells.height * cells.width);
   for (int i = 0; i < cells.height * cells.width; i++) {
     stateArray[i] = 0.0;
@@ -171,6 +174,18 @@ int main (int argc, char *argv[]) {
         }
         else if (currentEvent.key.keysym.sym == SDLK_LSHIFT) {
           isUsingRect = true;
+        }
+        else if (currentEvent.key.keysym.sym == SDLK_h) {
+          if (highlightedX == -1 && highlightedY == -1) {
+            highlightedX = selectedCellX;
+            highlightedY = selectedCellY;
+          }
+          else {
+            float distance = std::sqrt(std::pow((highlightedX - selectedCellX), 2.0f) + std::pow(highlightedY - selectedCellY, 2.0f));
+            std::cout << "Distance between cells: " << distance << std::endl;
+            highlightedX = -1;
+            highlightedY = -1;
+          }
         }
         else if (currentEvent.key.keysym.sym == SDLK_SPACE) {
           paused = !paused;
