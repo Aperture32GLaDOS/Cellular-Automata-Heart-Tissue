@@ -105,12 +105,17 @@ int main (int argc, char *argv[]) {
         cells.orientations[0].cells.push_front(&newCell);
       }
       else {
-        newCell.orientationIndex = 1;
-        cells.orientations[1].cells.push_front(&newCell);
+        newCell.orientationIndex = 0;
+        cells.orientations[0].cells.push_front(&newCell);
       }
       cells.cells[i * cells.width + j] = newCell;
     }
   }
+  // for (int i = 0; i < 7; i++) {
+  //   for (int j = 0; j < 7; j++) {
+  //     cells.cells[((i - 3 + cells.height / 2) * cells.width) + (j - 3) + cells.width / 2].type = CellType::Pacemaker;
+  //   }
+  // }
   window = SDL_CreateWindow("Heart Tissue", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
       cells.width, cells.height, SDL_WINDOW_SHOWN);
   renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);

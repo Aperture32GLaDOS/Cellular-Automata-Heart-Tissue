@@ -9,10 +9,10 @@
 #include <fftw3.h>
 #include <x86intrin.h>
 #define SIZE 1024
-#define SEARCH_RADIUS 64
+#define SEARCH_RADIUS 256
 #define AP_DURATION 8
 #define REST_DURATION 4
-#define AP_THRESHOLD 16
+#define AP_THRESHOLD 21
 
 enum CellType {
   // A heart cell here is represented either as a pacemaker cell, or a normal tissue cell
@@ -168,7 +168,8 @@ class NeighbourCounter {
           double dotProduct = xCoord * orientation.xDir + yCoord * orientation.yDir;
           double cosTheta = dotProduct / (std::sqrt(distance) * std::sqrt(orientation.xDir * orientation.xDir + orientation.yDir * orientation.yDir));
           cosTheta = std::abs(cosTheta);
-          double distanceFactor = (cosTheta + (1.0 / 3.0)) * 0.75;
+          double ratio = 4;
+          double distanceFactor = (cosTheta + (1.0 / (ratio - 1))) * ((ratio - 1) / (ratio));
           distanceFactor = std::pow(distanceFactor, 2.0);
           coefficients[(i * SEARCH_RADIUS) + j] = (1.0 / distance) * distanceFactor;
         }
