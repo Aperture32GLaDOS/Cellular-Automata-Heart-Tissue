@@ -1,3 +1,9 @@
+/*
+This program is a cellular automata which models heart tissue - all source files are to be
+licensed under the conditions defined in LICENSE.md
+Copyright (C) 2025 Eshe Hinchliffe
+*/
+
 #include "cells.cpp"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_events.h>
@@ -86,14 +92,11 @@ int main (int argc, char *argv[]) {
   cells.width = SIZE;
   cells.height = SIZE;
   cells.cells = new Cell[cells.height * cells.width];
-  cells.numOrientations = 2;
-  cells.orientations = new Orientation[2];
+  cells.numOrientations = 1;
+  cells.orientations = new Orientation[1];
   cells.orientations[0].xDir = 1.0;
   cells.orientations[0].yDir = 0.0;
   cells.orientations[0].cellCount = cells.height * cells.width * 0.5;
-  cells.orientations[1].xDir = 0.0;
-  cells.orientations[1].yDir = 1.0;
-  cells.orientations[1].cellCount = cells.height * cells.width * 0.5;
   // Initialize all cells to be inactive normal tissue
   for (int i = 0; i < cells.height; i++) {
     for (int j = 0; j < cells.width; j++) {
